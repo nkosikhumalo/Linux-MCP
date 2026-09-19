@@ -1,0 +1,5 @@
+{
+  "name": "Ubuntu Dev Assistant",
+  "outputfilename": "ubuntu-dev-assistant",
+  "frontend:dir": "frontend"
+}
