@@ -32,7 +32,6 @@ func main() {
     if err := server.ServeStdio(s); err != nil {
         fmt.Printf("Server error: %v\n", err)
     }
-    fmt.Println("Hello, Mbali!")
 }
  
 func helloHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
