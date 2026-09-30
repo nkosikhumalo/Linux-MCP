@@ -15,26 +15,26 @@
 
 ---
 
-## ✨ What is it?
+## What is it?
 
 Ubuntu Dev Assistant is a desktop chat app and a standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for Linux. You can ask an AI questions about your machine in everyday language. The assistant can look up system details with local tools, explain what it finds, and help with common actions such as opening an app.
 
 The app is written in **Go**. Its desktop window is built with **Wails**, and its chat model is provided through **OpenRouter**. The MCP server makes the same machine tools available to other MCP-compatible AI apps.
 
-> 🛠️ Think of it as a helpful guide to your computer: ask “What is using port 8080?” or “How much disk space do I have?” and it checks the relevant local information for you.
+> Think of it as a helpful guide to your computer: ask “What is using port 8080?” or “How much disk space do I have?” and it checks the relevant local information for you.
 
-## 🎨 At a glance
+## At a glance
 
 | | What it does |
 | --- | --- |
-| 💬 | Chat with your computer using simple prompts |
-| 🔎 | Inspect system information, processes, ports, disk, and memory |
-| 📦 | Find and open installed apps, including Snap, Flatpak, and PWAs |
-| 🧰 | Use the same tools from an MCP-compatible client |
-| 🧠 | Keep a short conversation history and choose a model through OpenRouter |
-| 🌗 | Switch between dark and light themes in the desktop app |
+| | Chat with your computer using simple prompts |
+| | Inspect system information, processes, ports, disk, and memory |
+| | Find and open installed apps, including Snap, Flatpak, and PWAs |
+| | Use the same tools from an MCP-compatible client |
+| | Keep a short conversation history and choose a model through OpenRouter |
+| | Switch between dark and light themes in the desktop app |
 
-## 🧩 What can it do?
+## What can it do?
 
 The built-in tools can:
 
@@ -50,7 +50,7 @@ The built-in tools can:
 
 The AI decides when to call a tool and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
 
-## 🏗️ How it fits together
+## How it fits together
 
 ```text
 You ──► Wails desktop chat ──► OpenRouter model
@@ -65,7 +65,7 @@ MCP-compatible client ──► stdio MCP server ──► same Go system tools
 
 The desktop chat sends your message and available tool descriptions to the selected OpenRouter model. When the model asks for a system check, the Go app runs the matching local tool and sends its result back so the model can answer. The separate MCP server speaks MCP over standard input and output; it does not start the desktop window or call the chat model.
 
-## 🚀 Get started
+## Get started
 
 ### You will need
 
@@ -139,7 +139,7 @@ It communicates over **stdio**, so it is intended to be launched by an MCP clien
 
 Client configuration formats differ; check your MCP client's docs for the correct place to add this entry. Keep standard output reserved for MCP messages when launching the server through a client.
 
-## ⚙️ Settings
+## Settings
 
 The app reads these optional settings from the environment or `.env` file:
 
@@ -152,7 +152,7 @@ The app reads these optional settings from the environment or `.env` file:
 
 The fast and heavy model names can be changed to models available through your OpenRouter account. The router picks between them using simple message hints; by default both settings point to the same model.
 
-## 🧰 Built-in MCP tools
+## Built-in MCP tools
 
 | Tool | In simple words |
 | --- | --- |
@@ -169,7 +169,7 @@ The fast and heavy model names can be changed to models available through your O
 | `git_status`, `git_log` | View a repository's status and recent commits |
 | `go_test` | Run Go tests in a project directory |
 
-## 🗂️ Project map
+## Project map
 
 ```text
 .
@@ -181,14 +181,14 @@ The fast and heavy model names can be changed to models available through your O
 └── frontend/              # Desktop interface (HTML, CSS, and JavaScript)
 ```
 
-## 🔐 A few practical notes
+## A few practical notes
 
 - The AI chat needs an internet connection and sends your prompt, conversation context, and any tool results used for that reply to OpenRouter. Avoid including passwords, API keys, or other secrets in chat.
 - System tools run on your machine under your user account. They do not automatically gain administrator access, and they cannot read files your account cannot access.
 - App discovery and launch work with desktop entries and common Ubuntu formats; exact support depends on what is installed on your system.
 - The MCP server exposes local machine tools to whichever MCP client launches it. Only add it to a client you trust.
 
-## 💙 Built with
+## Built with
 
 [![Go](https://img.shields.io/badge/Go-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev/)
 [![Wails](https://img.shields.io/badge/Wails-DF0000?style=flat-square&logo=wails&logoColor=white)](https://wails.io/)
@@ -199,6 +199,6 @@ The fast and heavy model names can be changed to models available through your O
 
 <div align="center">
 
-**Made for curious people who want to understand their machine.** 🐧
+**Made for curious people who want to understand their machine.**
 
 </div>
