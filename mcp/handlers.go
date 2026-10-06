@@ -59,6 +59,16 @@ func registerBuiltin(r *Registry) {
 	}, handleDiskUsage)
 
 	r.Register(Tool{
+		Name:        "storage_audit",
+		Description: "Read-only scan for the largest files under a directory (default your home folder). Reports exact paths and sizes so the user can inspect them. It never deletes, moves, or modifies files. Do not assume a file or installed app is unused.",
+		InputSchema: objectSchema(map[string]interface{}{
+			"path":        map[string]interface{}{"type": "string", "description": "Absolute directory to scan (default your home folder)."},
+			"min_size_mb": map[string]interface{}{"type": "integer", "description": "Only show files at least this large in MiB (default 100)."},
+			"limit":       map[string]interface{}{"type": "integer", "description": "Maximum results, 1-50 (default 20)."},
+		}),
+	}, handleStorageAudit)
+
+	r.Register(Tool{
 		Name:        "mem_free",
 		Description: "Show RAM usage via free -h.",
 		InputSchema: objectSchema(map[string]interface{}{}),
@@ -102,6 +112,15 @@ func registerBuiltin(r *Registry) {
 			},
 		}),
 	}, handleFindProcess)
+
+	r.Register(Tool{
+		Name:        "app_install_history",
+		Description: "Read local APT/DEB dpkg logs for dated package installation events. Logs may include dependencies and may be incomplete after rotation; no results means the date is unknown. This does not cover Snap, Flatpak, PWAs, or manual installs. Read-only; never modifies packages.",
+		InputSchema: objectSchema(map[string]interface{}{
+			"query": map[string]interface{}{"type": "string", "description": "Optional package name substring filter."},
+			"limit": map[string]interface{}{"type": "integer", "description": "Maximum events, 1-100 (default 40)."},
+		}),
+	}, handleAppInstallHistory)
 
 	r.Register(Tool{
 		Name:        "list_apps",
