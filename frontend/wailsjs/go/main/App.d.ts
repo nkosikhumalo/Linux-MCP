@@ -4,11 +4,17 @@ import {pipeline} from '../models';
 import {main} from '../models';
 import {mcp} from '../models';
 
+export function ApproveToolCall(arg1:string,arg2:boolean):Promise<boolean>;
+
+export function CancelChat():Promise<boolean>;
+
 export function Chat(arg1:string):Promise<pipeline.RunResult>;
 
 export function ClearChat():Promise<void>;
 
 export function DeleteConversation(arg1:string):Promise<void>;
+
+export function ExportConversation(arg1:string):Promise<string>;
 
 export function GetConversation(arg1:string):Promise<main.Conversation>;
 
