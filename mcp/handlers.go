@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -13,7 +14,7 @@ import (
 )
 
 func registerBuiltin(r *Registry) {
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "inspect_port",
 		Description: "Show which process owns a TCP/UDP port using ss -ltnp/-lunp. Use this for questions like 'what is on port 34115'.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -26,7 +27,7 @@ func registerBuiltin(r *Registry) {
 		}, "port"),
 	}, handleInspectPort)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "list_listening_ports",
 		Description: "List listening sockets via ss (with process names when available).",
 		InputSchema: ToolInputSchema{
@@ -39,13 +40,13 @@ func registerBuiltin(r *Registry) {
 		},
 	}, handleListListeningPorts)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "disk_free",
 		Description: "Show filesystem free/used space via df -h. Use for remaining disk size questions.",
 		InputSchema: objectSchema(map[string]interface{}{}),
 	}, handleDiskFree)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "disk_usage",
 		Description: "Show directory sizes via du -h (one level). Cannot read dirs you lack permission for — it will not bypass. Use for storage questions.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -58,7 +59,7 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleDiskUsage)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "storage_audit",
 		Description: "Read-only scan for the largest files under a directory (default your home folder). Reports exact paths and sizes so the user can inspect them. It never deletes, moves, or modifies files. Do not assume a file or installed app is unused.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -68,19 +69,19 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleStorageAudit)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "mem_free",
 		Description: "Show RAM usage via free -h.",
 		InputSchema: objectSchema(map[string]interface{}{}),
 	}, handleMemFree)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "os_info",
 		Description: "Show this machine's OS/distro (from /etc/os-release and uname). Use when asked what OS/version they run.",
 		InputSchema: objectSchema(map[string]interface{}{}),
 	}, handleOSInfo)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "top_processes",
 		Description: "Show top CPU/memory processes for the current user. Use for 'what is slowing my PC' / high CPU questions.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -93,17 +94,20 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleTopProcesses)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "security_scan",
-		Description: "Basic security check: run ClamAV (clamscan) on the user's home if installed, plus note whether clamav is present. Does NOT use sudo. Use for malware/virus questions.",
+		Description: "Run a read-only ClamAV scan, stream detected file findings to the desktop UI as they arrive, and report the final status. Waits for completion by default; optional timeout is supported. It never deletes or quarantines files.",
 		InputSchema: objectSchema(map[string]interface{}{
 			"path": map[string]interface{}{
-				"type": "string", "description": "Directory to scan (default: home). Absolute path only.",
+				"type": "string", "description": "Directory or file to scan (default: home). Absolute path only.",
+			},
+			"timeout_minutes": map[string]interface{}{
+				"type": "integer", "minimum": 0, "maximum": 60, "description": "Optional timeout in minutes, 1-60. Default 0 waits for completion; the desktop app has a Stop button.",
 			},
 		}),
 	}, handleSecurityScan)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "find_process",
 		Description: "List user processes. If name is empty, lists top processes. If name is set, filters by substring.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -113,7 +117,7 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleFindProcess)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "app_install_history",
 		Description: "Read local APT/DEB dpkg logs for dated package installation events. Logs may include dependencies and may be incomplete after rotation; no results means the date is unknown. This does not cover Snap, Flatpak, PWAs, or manual installs. Read-only; never modifies packages.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -122,7 +126,7 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleAppInstallHistory)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "list_apps",
 		Description: "Search installed apps (apt/snap/flatpak/PWA desktop entries). Use to discover the real name before open_app/close_app.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -175,7 +179,7 @@ func registerBuiltin(r *Registry) {
 		}, "uri"),
 	}, handleOpenURI)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "git_status",
 		Description: "Show git status --short --branch for a repo path.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -183,7 +187,7 @@ func registerBuiltin(r *Registry) {
 		}, "dir"),
 	}, handleGitStatus)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "git_log",
 		Description: "Show recent git commits (oneline).",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -192,7 +196,7 @@ func registerBuiltin(r *Registry) {
 		}, "dir"),
 	}, handleGitLog)
 
-	r.Register(Tool{
+	r.RegisterReadOnly(Tool{
 		Name:        "journalctl",
 		Description: "Query systemd journal (narrow filters preferred).",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -367,38 +371,112 @@ func handleSecurityScan(args map[string]interface{}) (string, error) {
 		}
 		path = home
 	}
-	if !strings.HasPrefix(path, "/") || strings.IndexByte(path, 0) >= 0 {
+	if !filepath.IsAbs(path) || strings.IndexByte(path, 0) >= 0 {
 		return "", fmt.Errorf("path must be absolute")
+	}
+	path = filepath.Clean(path)
+	if _, err := os.Stat(path); err != nil {
+		return "", fmt.Errorf("cannot access scan path %s: %w", path, err)
+	}
+	if _, err := exec.LookPath("clamscan"); err != nil {
+		return "clamav: clamscan is not installed or is not on PATH; no security scan was run. Install/configure ClamAV yourself and ask again. This tool does not use sudo.", nil
+	}
+
+	ctx := context.Background()
+	if requestCtx, ok := args[requestContextArg].(context.Context); ok && requestCtx != nil {
+		ctx = requestCtx
+	}
+	minutes := intArg(args, "timeout_minutes", 0)
+	if minutes < 0 {
+		minutes = 0
+	}
+	if minutes > 60 {
+		minutes = 60
+	}
+	var cancel context.CancelFunc
+	if minutes > 0 {
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(minutes)*time.Minute)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+	defer cancel()
+
+	scanID := strconv.FormatInt(time.Now().UnixNano(), 10)
+	observer := securityScanObserver(ctx)
+	emit := func(kind, message string) {
+		if observer != nil {
+			observer(SecurityScanEvent{ID: scanID, Type: kind, Path: path, Message: message, At: time.Now()})
+		}
+	}
+	emit("started", "Scanning…")
+	findings := 0
+	var partial strings.Builder
+	processLine := func(line string) {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			return
+		}
+		if strings.Contains(line, " FOUND") {
+			findings++
+			emit("finding", line)
+		}
+	}
+	observeOutput := func(chunk []byte) {
+		partial.Write(chunk)
+		lines := strings.Split(partial.String(), "\n")
+		partial.Reset()
+		for _, line := range lines[:len(lines)-1] {
+			processLine(line)
+		}
+		partial.WriteString(lines[len(lines)-1])
+	}
+	command := "clamscan"
+	commandArgs := []string{"-r", "-i", "--max-filesize=25M", "--max-scansize=150M", path}
+	if _, err := exec.LookPath("stdbuf"); err == nil {
+		command = "stdbuf"
+		commandArgs = append([]string{"-oL", "-eL", "clamscan"}, commandArgs...)
+	}
+	res, runErr := RunCommandObserved(ctx, command, observeOutput, commandArgs...)
+	processLine(partial.String())
+	if res == nil {
+		emit("failed", "ClamAV could not start.")
+		return "", fmt.Errorf("could not run ClamAV: %w", runErr)
 	}
 
 	var b strings.Builder
-	if _, err := exec.LookPath("clamscan"); err != nil {
-		b.WriteString("clamav: not installed (clamscan not on PATH)\n")
-		b.WriteString("note: I cannot sudo-install packages. Install ClamAV yourself, then ask me to scan again.\n")
-		// Still give a lightweight process glance.
-		top, err := handleTopProcesses(map[string]interface{}{"limit": 10, "sort": "cpu"})
-		if err == nil {
-			b.WriteString("\n--- top processes (not a malware verdict) ---\n")
-			b.WriteString(top)
-		}
-		return b.String(), nil
-	}
-
-	b.WriteString("clamav: found clamscan — scanning (infected-only report). This may take a while.\n")
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	defer cancel()
-	res, err := RunCommand(ctx, "clamscan", "-r", "-i",
-		"--max-filesize=25M", "--max-scansize=150M", path)
-	if err != nil && res == nil {
-		return "", err
-	}
-	if res != nil {
-		b.WriteString(FormatExec(res))
-		if strings.TrimSpace(res.Stdout) == "" && res.ExitCode == 0 {
-			b.WriteString("(no infected files reported in scan scope)\n")
+	b.WriteString("ClamAV scan report (read-only; no files were changed).\n")
+	fmt.Fprintf(&b, "Target: %s\n", path)
+	status, message := "failed", "ClamAV could not complete the scan. This is not a clean result."
+	switch {
+	case runErr != nil:
+		status = "failed"
+	case res.Cancelled:
+		status, message = "cancelled", "The scan was stopped before completion; partial findings remain visible above. This is not a clean result."
+	case res.TimedOut:
+		status, message = "incomplete", fmt.Sprintf("The scan did not finish within %d minute(s); partial findings remain visible above. This is not a clean result.", minutes)
+	default:
+		switch res.ExitCode {
+		case 0:
+			status, message = "completed", "Completed with no infected files reported in the scanned scope."
+		case 1:
+			status, message = "infected", fmt.Sprintf("Completed; ClamAV reported %d infected file(s). Review the findings above. Nothing was removed or quarantined.", findings)
+		default:
+			status, message = "failed", fmt.Sprintf("ClamAV exited with code %d. This is not a clean result.", res.ExitCode)
 		}
 	}
-	b.WriteString("\nnote: a clean ClamAV home scan is not a guarantee; it is one signal.\n")
+	fmt.Fprintf(&b, "Status: %s — %s\n", strings.ToUpper(status), message)
+	emit(status, message)
+	if res.Stdout != "" {
+		fmt.Fprintf(&b, "\n--- ClamAV output ---\n%s\n", res.Stdout)
+	}
+	if res.Stderr != "" {
+		fmt.Fprintf(&b, "\n--- ClamAV diagnostics ---\n%s\n", res.Stderr)
+	}
+	if runErr != nil {
+		fmt.Fprintf(&b, "\nRunner error: %v\n", runErr)
+	}
+	fmt.Fprintf(&b, "\nFindings streamed: %d\nDuration: %s\n", findings, res.Duration)
+	b.WriteString("A completed clean scan is one signal, not a guarantee. Files larger than the configured per-file scan limits may be skipped.")
 	return b.String(), nil
 }
 
