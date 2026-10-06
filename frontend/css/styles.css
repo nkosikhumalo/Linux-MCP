@@ -243,7 +243,7 @@ body {
 
 .composer {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 0.6rem;
   align-items: end;
   padding: 0.75rem 1rem 1rem;
@@ -300,7 +300,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .send-btn {
+  .send-btn,
+  .stop-btn {
     width: 100%;
   }
 }
@@ -431,4 +432,144 @@ body {
     width: min(280px, 86vw);
     box-shadow: 8px 0 24px rgba(0, 0, 0, 0.22);
   }
+}
+
+/* Conversation history opens as a drawer; only the theme control stays on the right. */
+.top {
+  justify-content: space-between;
+}
+
+.brand {
+  gap: 0.65rem;
+}
+
+.menu-btn {
+  display: grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.menu-btn:hover { border-color: var(--muted); }
+
+.workspace,
+.workspace.history-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.history-panel {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, 86vw);
+  padding: 0.85rem 0.75rem;
+  border-right: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow: 12px 0 28px rgba(0, 0, 0, 0.25);
+  overflow-y: auto;
+  transform: translateX(-105%);
+  visibility: hidden;
+  transition: transform 180ms ease, visibility 180ms ease;
+}
+
+.history-panel.open {
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.history-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.25rem 0.7rem;
+}
+
+.history-heading {
+  padding: 0;
+  color: var(--fg);
+  font-size: 0.85rem;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.history-close {
+  padding: 0.1rem 0.5rem;
+  font-size: 1.2rem;
+}
+
+.new-chat-btn {
+  width: 100%;
+  margin-bottom: 0.8rem;
+  text-align: left;
+}
+
+.history-list {
+  overflow-y: auto;
+}
+
+.history-backdrop {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  display: none;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.history-backdrop.visible { display: block; }
+
+@media (max-width: 560px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .history-panel { display: flex; }
+  .history-panel.open { display: flex; }
+}
+
+.stop-btn {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--fg);
+  font: inherit;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+
+.stop-btn:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.stop-btn:disabled { opacity: 0.65; cursor: wait; }
+
+.scan-report {
+  width: min(46rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.scan-report-heading { font-weight: 600; }
+.scan-report-target,
+.scan-report-status { margin-top: 0.25rem; color: var(--muted); font-size: 0.82rem; }
+.scan-status-infected,
+.scan-status-failed,
+.scan-status-incomplete,
+.scan-status-cancelled { color: var(--danger); }
+.scan-findings { display: grid; gap: 0.3rem; margin-top: 0.6rem; }
+.scan-finding {
+  overflow-wrap: anywhere;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 0.78rem;
 }
