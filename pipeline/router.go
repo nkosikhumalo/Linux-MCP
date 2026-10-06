@@ -43,11 +43,17 @@ type RunResult struct {
 // NewRouter wires defaults (overridable via .env).
 func NewRouter(client *Client, tools *sys.Registry) *Router {
 	LoadDotEnvDefault()
+	fastModel := envOr("OPENROUTER_FAST_MODEL", defaultFastModel)
+	heavyModel := envOr("OPENROUTER_HEAVY_MODEL", defaultHeavyModel)
+	if client != nil && client.local {
+		model := strings.TrimSpace(os.Getenv("LOCAL_MODEL_NAME"))
+		fastModel, heavyModel = model, model
+	}
 	return &Router{
 		Client:     client,
 		Tools:      tools,
-		FastModel:  envOr("OPENROUTER_FAST_MODEL", defaultFastModel),
-		HeavyModel: envOr("OPENROUTER_HEAVY_MODEL", defaultHeavyModel),
+		FastModel:  fastModel,
+		HeavyModel: heavyModel,
 		MaxRounds:  defaultMaxRounds,
 		MaxTokens:  envInt("OPENROUTER_MAX_TOKENS", defaultMaxTokens),
 	}
@@ -180,7 +186,7 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 
 			text := "no tool registry configured"
 			if r.Tools != nil {
-				text, _ = r.Tools.Dispatch(name, args)
+				text, _ = r.Tools.DispatchContext(ctx, name, args)
 			}
 			tr.Add("tool_result", name, truncate(text, 500))
 			results = append(results, text)
@@ -193,6 +199,12 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 			})
 			if !isDoneActionTool(name) {
 				allDoneActions = false
+			}
+			if ctx.Err() != nil {
+				reply := "The request was stopped before the tool finished. Its output is partial and is not a completed result.\n\n" + truncate(text, 2400)
+				tr.Add("route_decision", "cancelled_tool", name)
+				r.appendHistory(userMessage, reply)
+				return &RunResult{Reply: reply, Trace: tr.Snapshot()}, nil
 			}
 		}
 
@@ -457,7 +469,7 @@ Diagnostics:
 - Slow PC / high CPU: use top_processes + mem_free (+ disk_free if useful). Name the heaviest processes from the tool output.
 - Storage cleanup questions: use disk_free and storage_audit (and disk_usage for folder totals). Report large file paths and sizes, let the user inspect them with open_uri, and never delete or imply an app/file is unused without evidence. Explain safe options and get explicit user direction before any cleanup action. For installed apps, use list_apps to check names; alternatives are suggestions only and should fit the app purpose. Use app_install_history for dated APT/DEB package events; explain that logs may include dependencies or be incomplete. Do not infer dates for Snap, Flatpak, PWA, or manual installs when their date is unavailable.
 - "What OS am I on?": use os_info — never ask them to run lsb_release.
-- Malware / virus / "do a scan": use security_scan. If ClamAV is missing, say so. Do NOT search for a process literally named "malware".
+- Malware / virus / "do a scan": use security_scan. If ClamAV is missing, say so. Do NOT search for a process literally named "malware". ClamAV detections stream into the desktop chat while it scans; scans wait for completion by default, and the user can press Stop. Treat stopped or timed-out scans as incomplete.
 - You cannot sudo-install packages. Say that clearly if they ask you to install antivirus; you CAN scan if clamscan is already installed.
 - "Run the tests" with a performance question means system diagnostics (top_processes), not go test, unless they mention Go/code.
 
