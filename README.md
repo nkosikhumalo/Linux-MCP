@@ -19,7 +19,7 @@
 
 Ubuntu Dev Assistant is a desktop chat app and a standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for Linux. You can ask an AI questions about your machine in everyday language. The assistant can look up system details with local tools, explain what it finds, and help with common actions such as opening an app.
 
-The app is written in **Go**. Its desktop window is built with **Wails**, and its chat model is provided through **OpenRouter**. The MCP server makes the same machine tools available to other MCP-compatible AI apps.
+The app is written in **Go**. Its desktop window is built with **Wails**, and its chat model can run through a loopback local model endpoint by default, or through **OpenRouter** when explicitly enabled. The MCP server makes the same machine tools available to other MCP-compatible AI apps.
 
 > Think of it as a helpful guide to your computer: ask “What is using port 8080?” or “How much disk space do I have?” and it checks the relevant local information for you.
 
@@ -31,7 +31,7 @@ The app is written in **Go**. Its desktop window is built with **Wails**, and it
 | | Inspect system information, processes, ports, disk, and memory |
 | | Find and open installed apps, including Snap, Flatpak, and PWAs |
 | | Use the same tools from an MCP-compatible client |
-| | Save, reopen, delete, and download local chat history; choose a model through OpenRouter |
+| | Save, reopen, delete, and download local chat history; use local inference or explicitly opt into OpenRouter |
 | | Switch between dark and light themes in the desktop app |
 
 ## What can it do?
@@ -45,17 +45,17 @@ The built-in tools can:
 - Open a URL or file with your default desktop handler.
 - Read selected system journal entries and check Git status or recent commits.
 - Run Go tests in a project directory.
-- Run a basic ClamAV scan when ClamAV is installed.
+- Run a read-only ClamAV scan, view detections live, and stop it from the desktop app when needed.
 - Stop a user-owned process by PID or exact process name.
 
-The AI decides when to call a tool and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
+The AI can request a tool, but state-changing or code-executing tools wait for your approval in the desktop app. The standalone MCP server denies those tools because it has no approval UI. The AI decides when to call read-only tools and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
 
 Storage audits only inspect and report. They do not determine whether files or installed applications are unused, and they do not delete or move anything. The assistant can help explain a result and open a reported path for inspection; users decide whether to remove anything themselves. APT/DEB installation dates come from local package logs, which may be incomplete and can include dependencies rather than user-facing apps. Snap, Flatpak, PWA, and manually installed app dates are reported as unknown when no reliable local date is available.
 
 ## How it fits together
 
 ```text
-You ──► Wails desktop chat ──► OpenRouter model
+You ──► Wails desktop chat ──► local loopback model (default) / OpenRouter (opt-in)
                                   │
                                   └── requests a local tool
                                            │
@@ -65,7 +65,7 @@ You ──► Wails desktop chat ──► OpenRouter model
 MCP-compatible client ──► stdio MCP server ──► same Go system tools
 ```
 
-The desktop chat sends your message and available tool descriptions to the selected OpenRouter model. When the model asks for a system check, the Go app runs the matching local tool and sends its result back so the model can answer. The separate MCP server speaks MCP over standard input and output; it does not start the desktop window or call the chat model.
+In local mode, the desktop chat sends your message and available tool descriptions only to the configured loopback model endpoint. In OpenRouter mode, it sends them to the selected OpenRouter model. When the model asks for a system check, the Go app runs the matching local tool and sends its result back so the model can answer. The separate MCP server speaks MCP over standard input and output; it does not start the desktop window or call the chat model.
 
 ## Get started
 
@@ -74,7 +74,7 @@ The desktop chat sends your message and available tool descriptions to the selec
 - Linux (the built-in system tools target Ubuntu and similar Linux desktops).
 - Go **1.25.5** or newer, matching the version in `go.mod`.
 - The [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation/) and its Linux desktop build dependencies to run or build the GUI.
-- An [OpenRouter API key](https://openrouter.ai/keys) for the desktop chat. The standalone MCP server does not need an API key.
+- A local model server with an OpenAI-compatible API endpoint for the default private mode, or an [OpenRouter API key](https://openrouter.ai/keys) if you explicitly choose cloud mode. The standalone MCP server does not need an API key.
 
 ### 1. Get the project
 
@@ -85,21 +85,17 @@ cd ubuntu-dev-assistant
 
 Replace `<your-repository-url>` with the URL of your Git repository.
 
-### 2. Add your OpenRouter key
+### 2. Configure the model
 
-Copy the example settings and add your key:
+Copy the example settings:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` and set `OPENROUTER_API_KEY`:
+Local inference is the default for new configurations. Set `LOCAL_MODEL_BASE_URL` to your local model server and `LOCAL_MODEL_NAME` to a model it provides. The endpoint must use HTTP on the loopback IP `127.0.0.1` or `::1`; the app rejects hostnames and remote endpoints, disables environment proxy use, and does not follow redirects in local mode.
 
-```dotenv
-OPENROUTER_API_KEY=your_openrouter_api_key
-```
-
-Keep your key private. `.env` is excluded from Git, so it should stay on your machine.
+To use OpenRouter in a new configuration, explicitly set `AI_MODE=openrouter` and provide `OPENROUTER_API_KEY`. Existing setups with an OpenRouter key and no `AI_MODE` keep using OpenRouter for compatibility; set `AI_MODE=local` to prevent cloud fallback. In that mode, your chat, conversation context, and tool results are sent to the cloud provider; check its retention and training policy. Keep `.env` private and out of Git.
 
 ### 3. Launch the desktop app
 
@@ -147,16 +143,19 @@ The app reads these optional settings from the environment or `.env` file:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `OPENROUTER_API_KEY` | *(required for chat)* | Your OpenRouter API key |
+| `AI_MODE` | From configured settings | `local` keeps model requests on loopback; `openrouter` selects OpenRouter. If unset, a complete local configuration is preferred, otherwise an existing OpenRouter key preserves the previous setup |
+| `LOCAL_MODEL_BASE_URL` | *(required in local mode)* | HTTP endpoint on a loopback IP, such as `http://127.0.0.1:11434/v1` |
+| `LOCAL_MODEL_NAME` | *(required in local mode)* | Model name served by the local endpoint |
+| `OPENROUTER_API_KEY` | *(required in OpenRouter mode)* | Your OpenRouter API key |
 | `OPENROUTER_FAST_MODEL` | `openai/gpt-4o-mini` | Model used for ordinary questions |
 | `OPENROUTER_HEAVY_MODEL` | `openai/gpt-4o-mini` | Model used for longer or more involved system questions |
 | `OPENROUTER_MAX_TOKENS` | `1024` | Maximum response tokens requested from the model |
 
-The fast and heavy model names can be changed to models available through your OpenRouter account. The router picks between them using simple message hints; by default both settings point to the same model.
+In OpenRouter mode, the fast and heavy model names can be changed to models available through your OpenRouter account. The router picks between them using simple message hints; by default both settings point to the same model.
 
 ## Local chat history
 
-Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. There is no database or cloud history store in this feature. The app can reopen a saved chat, continue it with recent messages as model context, delete it, or download it as Markdown. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model service as part of the ordinary chat request.
+Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. There is no database or cloud history store in this feature. The app can reopen a saved chat, continue it with recent messages as model context, delete it, or export a JSON copy to a location chosen by the user. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model endpoint as part of the ordinary chat request. With local mode, that endpoint is restricted to loopback; with OpenRouter mode, the context leaves the machine.
 
 ## Built-in MCP tools
 
@@ -185,16 +184,16 @@ Desktop conversations are saved as individual JSON files under `~/.local/share/u
 ├── main.go                # Starts the Wails desktop app
 ├── cmd/mcp-server/        # Standalone stdio MCP server
 ├── mcp/                   # Local Linux tools and MCP tool registry
-├── pipeline/              # OpenRouter client and chat/tool routing
+├── pipeline/              # Local/OpenRouter clients and chat/tool routing
 └── frontend/              # Desktop interface (HTML, CSS, and JavaScript)
 ```
 
 ## A few practical notes
 
-- The AI chat needs an internet connection and sends your prompt, conversation context, and any tool results used for that reply to OpenRouter. Avoid including passwords, API keys, or other secrets in chat.
+- Local mode does not send prompts or tool results to a cloud model, but the local model server is software running on your machine and should be kept up to date. OpenRouter mode sends prompts, conversation context, and tool results to OpenRouter and its selected provider; avoid secrets and review that provider's data policy.
 - System tools run on your machine under your user account. They do not automatically gain administrator access, and they cannot read files your account cannot access.
 - App discovery and launch work with desktop entries and common Ubuntu formats; exact support depends on what is installed on your system.
-- The MCP server exposes local machine tools to whichever MCP client launches it. Only add it to a client you trust.
+- The MCP server exposes local machine tools to whichever MCP client launches it; that client can see returned data and may send it to its own model provider. Only add it to a client you trust. State-changing and code-executing tools are denied by the standalone server because it cannot ask you for approval.
 
 ## Built with
 
