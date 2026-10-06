@@ -10,6 +10,26 @@ export function ClearChat() {
   return window['go']['main']['App']['ClearChat']();
 }
 
+export function DeleteConversation(arg1) {
+  return window['go']['main']['App']['DeleteConversation'](arg1);
+}
+
+export function GetConversation(arg1) {
+  return window['go']['main']['App']['GetConversation'](arg1);
+}
+
+export function ListConversations() {
+  return window['go']['main']['App']['ListConversations']();
+}
+
 export function ListTools() {
   return window['go']['main']['App']['ListTools']();
+}
+
+export function NewConversation() {
+  return window['go']['main']['App']['NewConversation']();
+}
+
+export function OpenConversation(arg1) {
+  return window['go']['main']['App']['OpenConversation'](arg1);
 }
