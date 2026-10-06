@@ -20,21 +20,29 @@ const (
 
 // ExecResult is the captured outcome of one local process.
 type ExecResult struct {
-	Command  string
-	Stdout   string
-	Stderr   string
-	ExitCode int
-	Duration time.Duration
+	Command   string
+	Stdout    string
+	Stderr    string
+	ExitCode  int
+	Duration  time.Duration
+	TimedOut  bool
+	Cancelled bool
 }
 
 // RunCommand runs name with args under ctx (default 30s). No shell.
 func RunCommand(ctx context.Context, name string, args ...string) (*ExecResult, error) {
-	return run(ctx, "", name, args...)
+	return run(ctx, "", nil, name, args...)
+}
+
+// RunCommandObserved runs a command and passes each stdout chunk to observe as it arrives.
+// The callback runs on the stdout copy goroutine and should return quickly.
+func RunCommandObserved(ctx context.Context, name string, observe func([]byte), args ...string) (*ExecResult, error) {
+	return run(ctx, "", observe, name, args...)
 }
 
 // RunInDir is RunCommand with an explicit working directory.
 func RunInDir(ctx context.Context, dir, name string, args ...string) (*ExecResult, error) {
-	return run(ctx, dir, name, args...)
+	return run(ctx, dir, nil, name, args...)
 }
 
 // StartDetached launches a process and returns immediately (for GUI apps).
@@ -75,7 +83,7 @@ func startDetached(name string, args ...string) (int, error) {
 	return pid, nil
 }
 
-func run(ctx context.Context, dir, name string, args ...string) (*ExecResult, error) {
+func run(ctx context.Context, dir string, observe func([]byte), name string, args ...string) (*ExecResult, error) {
 	if err := validateArgv(name, args); err != nil {
 		return nil, err
 	}
@@ -93,9 +101,10 @@ func run(ctx context.Context, dir, name string, args ...string) (*ExecResult, er
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &limitedWriter{buf: &stdout, max: maxOutputBytes}
-	cmd.Stderr = &limitedWriter{buf: &stderr, max: maxOutputBytes}
+	stdout := &limitedWriter{buf: &bytes.Buffer{}, max: maxOutputBytes, observe: observe}
+	stderr := &limitedWriter{buf: &bytes.Buffer{}, max: maxOutputBytes}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err := cmd.Run()
 	res := &ExecResult{
@@ -106,12 +115,15 @@ func run(ctx context.Context, dir, name string, args ...string) (*ExecResult, er
 	}
 
 	if err != nil {
+		if ctx.Err() != nil {
+			res.TimedOut = ctx.Err() == context.DeadlineExceeded
+			res.Cancelled = ctx.Err() == context.Canceled
+			res.ExitCode = -1
+			return res, nil // preserve partial output so callers can report an incomplete scan
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			res.ExitCode = exitErr.ExitCode()
 			return res, nil // non-zero exit is a result, not a transport failure
-		}
-		if ctx.Err() != nil {
-			return res, fmt.Errorf("command cancelled or timed out: %w", ctx.Err())
 		}
 		return res, fmt.Errorf("exec %s: %w", name, err)
 	}
@@ -132,6 +144,11 @@ func FormatExec(r *ExecResult) string {
 		fmt.Fprintf(&b, "--- stderr ---\n%s\n", r.Stderr)
 	}
 	fmt.Fprintf(&b, "exit=%d duration=%s\n", r.ExitCode, r.Duration)
+	if r.TimedOut {
+		b.WriteString("process timed out; output above may be partial\n")
+	} else if r.Cancelled {
+		b.WriteString("process was cancelled; output above may be partial\n")
+	}
 	return b.String()
 }
 
@@ -152,26 +169,48 @@ func validateArgv(name string, args []string) error {
 	return nil
 }
 
-// limitedWriter stops accepting data after max bytes (appends a marker once).
+// limitedWriter bounds captured output while preserving both the beginning and end,
+// where tools such as clamscan often print their final summary.
 type limitedWriter struct {
-	buf *bytes.Buffer
-	max int
-	hit bool
+	buf     *bytes.Buffer
+	max     int
+	hit     bool
+	tail    []byte
+	observe func([]byte)
 }
 
 func (w *limitedWriter) Write(p []byte) (int, error) {
-	remain := w.max - w.buf.Len()
-	if remain <= 0 {
-		w.hit = true
-		return len(p), nil
+	inputLen := len(p)
+	if w.observe != nil {
+		w.observe(p)
 	}
-	if len(p) > remain {
-		_, _ = w.buf.Write(p[:remain])
-		if !w.hit {
-			_, _ = w.buf.WriteString("\n...[truncated]...\n")
-			w.hit = true
+	limit := w.max / 2
+	if limit < 1 {
+		limit = w.max
+	}
+	remain := limit - w.buf.Len()
+	if remain > 0 {
+		keep := len(p)
+		if keep > remain {
+			keep = remain
 		}
-		return len(p), nil
+		_, _ = w.buf.Write(p[:keep])
+		p = p[keep:]
 	}
-	return w.buf.Write(p)
+	if len(p) > 0 {
+		w.hit = true
+		keepTail := w.max - limit
+		w.tail = append(w.tail, p...)
+		if len(w.tail) > keepTail {
+			w.tail = append([]byte(nil), w.tail[len(w.tail)-keepTail:]...)
+		}
+	}
+	return inputLen, nil
+}
+
+func (w *limitedWriter) String() string {
+	if !w.hit {
+		return w.buf.String()
+	}
+	return w.buf.String() + "\n...[output truncated; showing beginning and end]...\n" + string(w.tail)
 }
