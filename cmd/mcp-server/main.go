@@ -35,7 +35,7 @@ func toMCPTool(t sys.Tool) mcp.Tool {
 
 func dispatch(reg *sys.Registry, name string) server.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		text, isErr := reg.Dispatch(name, req.GetArguments())
+		text, isErr := reg.DispatchContext(ctx, name, req.GetArguments())
 		if isErr {
 			return mcp.NewToolResultError(text), nil
 		}
