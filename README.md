@@ -31,7 +31,7 @@ The app is written in **Go**. Its desktop window is built with **Wails**, and it
 | | Inspect system information, processes, ports, disk, and memory |
 | | Find and open installed apps, including Snap, Flatpak, and PWAs |
 | | Use the same tools from an MCP-compatible client |
-| | Keep a short conversation history and choose a model through OpenRouter |
+| | Save, reopen, delete, and download local chat history; choose a model through OpenRouter |
 | | Switch between dark and light themes in the desktop app |
 
 ## What can it do?
@@ -39,9 +39,9 @@ The app is written in **Go**. Its desktop window is built with **Wails**, and it
 The built-in tools can:
 
 - Show your Linux distribution and kernel details.
-- Check free disk space, directory sizes, and RAM usage.
+- Check free disk space, directory sizes, the largest files in a folder, and RAM usage.
 - Find processes, show top CPU or memory users, and inspect listening TCP/UDP ports.
-- Search for apps and open or close supported apps.
+- Search for apps, view available APT/DEB install history, and open or close supported apps.
 - Open a URL or file with your default desktop handler.
 - Read selected system journal entries and check Git status or recent commits.
 - Run Go tests in a project directory.
@@ -49,6 +49,8 @@ The built-in tools can:
 - Stop a user-owned process by PID or exact process name.
 
 The AI decides when to call a tool and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
+
+Storage audits only inspect and report. They do not determine whether files or installed applications are unused, and they do not delete or move anything. The assistant can help explain a result and open a reported path for inspection; users decide whether to remove anything themselves. APT/DEB installation dates come from local package logs, which may be incomplete and can include dependencies rather than user-facing apps. Snap, Flatpak, PWA, and manually installed app dates are reported as unknown when no reliable local date is available.
 
 ## How it fits together
 
@@ -152,16 +154,22 @@ The app reads these optional settings from the environment or `.env` file:
 
 The fast and heavy model names can be changed to models available through your OpenRouter account. The router picks between them using simple message hints; by default both settings point to the same model.
 
+## Local chat history
+
+Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. There is no database or cloud history store in this feature. The app can reopen a saved chat, continue it with recent messages as model context, delete it, or download it as Markdown. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model service as part of the ordinary chat request.
+
 ## Built-in MCP tools
 
 | Tool | In simple words |
 | --- | --- |
 | `os_info` | Identify the operating system and kernel |
 | `disk_free`, `disk_usage` | Check disk space and folder sizes |
+| `storage_audit` | Find large files under a folder (read-only; reports paths and sizes) |
 | `mem_free` | Check memory (RAM) use |
 | `top_processes`, `find_process` | Find active processes and heavy CPU/RAM users |
 | `inspect_port`, `list_listening_ports` | See which processes are listening on network ports |
 | `list_apps`, `open_app`, `close_app` | Find, launch, and close supported desktop apps |
+| `app_install_history` | Read dated APT/DEB package events from available local logs |
 | `open_uri` | Open a URL or local file with its default app |
 | `stop_process` | Ask a user-owned process to stop |
 | `security_scan` | Scan a folder with ClamAV, if installed |
