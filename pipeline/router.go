@@ -82,6 +82,25 @@ func (r *Router) ClearHistory() {
 	r.mu.Unlock()
 }
 
+// SetHistory replaces the in-memory context used for the next chat turn.
+func (r *Router) SetHistory(history []ChatMessage) {
+	if r == nil {
+		return
+	}
+	clean := make([]ChatMessage, 0, len(history))
+	for _, msg := range history {
+		if (msg.Role == "user" || msg.Role == "assistant") && strings.TrimSpace(msg.Content) != "" {
+			clean = append(clean, ChatMessage{Role: msg.Role, Content: msg.Content})
+		}
+	}
+	if len(clean) > maxHistoryMsgs {
+		clean = clean[len(clean)-maxHistoryMsgs:]
+	}
+	r.mu.Lock()
+	r.history = clean
+	r.mu.Unlock()
+}
+
 // Run sends userMessage through the model/tool loop, with conversation memory.
 func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error) {
 	tr := NewTracer()
@@ -436,6 +455,7 @@ How to talk:
 
 Diagnostics:
 - Slow PC / high CPU: use top_processes + mem_free (+ disk_free if useful). Name the heaviest processes from the tool output.
+- Storage cleanup questions: use disk_free and storage_audit (and disk_usage for folder totals). Report large file paths and sizes, let the user inspect them with open_uri, and never delete or imply an app/file is unused without evidence. Explain safe options and get explicit user direction before any cleanup action. For installed apps, use list_apps to check names; alternatives are suggestions only and should fit the app purpose. Use app_install_history for dated APT/DEB package events; explain that logs may include dependencies or be incomplete. Do not infer dates for Snap, Flatpak, PWA, or manual installs when their date is unavailable.
 - "What OS am I on?": use os_info — never ask them to run lsb_release.
 - Malware / virus / "do a scan": use security_scan. If ClamAV is missing, say so. Do NOT search for a process literally named "malware".
 - You cannot sudo-install packages. Say that clearly if they ask you to install antivirus; you CAN scan if clamscan is already installed.
