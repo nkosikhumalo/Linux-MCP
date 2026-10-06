@@ -10,23 +10,27 @@
   <div class="shell">
     <header class="top">
       <div class="brand">
+        <button type="button" id="history-toggle" class="menu-btn" aria-label="Open chat history" aria-expanded="false" aria-controls="history-panel">
+          <span aria-hidden="true">☰</span>
+        </button>
         <span class="brand-mark" aria-hidden="true"></span>
         <h1>Ubuntu Dev Assistant</h1>
       </div>
-      <div class="top-actions">
-        <button type="button" id="new-chat" class="icon-btn">New chat</button>
-        <button type="button" id="history-toggle" class="icon-btn" aria-expanded="true">History</button>
-        <button type="button" id="theme-btn" class="icon-btn" aria-label="Switch theme" title="Switch theme">
-          <span id="theme-label">Light</span>
-        </button>
-      </div>
+      <button type="button" id="theme-btn" class="icon-btn" aria-label="Switch theme" title="Switch theme">
+        <span id="theme-label">Light</span>
+      </button>
     </header>
 
     <div class="workspace">
-      <aside id="history-panel" class="history-panel" aria-label="Conversation history">
-        <div class="history-heading">Saved conversations</div>
+      <aside id="history-panel" class="history-panel" aria-label="Conversation history" aria-hidden="true">
+        <div class="history-panel-heading">
+          <div class="history-heading">Chat history</div>
+          <button type="button" id="history-close" class="icon-btn history-close" aria-label="Close chat history">×</button>
+        </div>
+        <button type="button" id="new-chat" class="icon-btn new-chat-btn">＋ New chat</button>
         <div id="history-list" class="history-list"></div>
       </aside>
+      <div id="history-backdrop" class="history-backdrop" aria-hidden="true"></div>
       <section class="chat-pane" aria-label="Chat">
         <main id="thread" class="thread" aria-live="polite"></main>
         <footer class="composer">
@@ -38,6 +42,7 @@
             autocomplete="off"
           ></textarea>
           <button type="button" id="send" class="send-btn" disabled>Send</button>
+          <button type="button" id="stop" class="stop-btn" hidden>Stop</button>
         </footer>
       </section>
     </div>
