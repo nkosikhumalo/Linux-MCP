@@ -2,16 +2,20 @@
   const thread = document.getElementById("thread");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
+  const stopBtn = document.getElementById("stop");
   const themeBtn = document.getElementById("theme-btn");
   const themeLabel = document.getElementById("theme-label");
   const newChatBtn = document.getElementById("new-chat");
   const historyToggle = document.getElementById("history-toggle");
+  const historyClose = document.getElementById("history-close");
+  const historyBackdrop = document.getElementById("history-backdrop");
   const historyPanel = document.getElementById("history-panel");
   const historyList = document.getElementById("history-list");
   const workspace = document.querySelector(".workspace");
   let activeConversationId = null;
   let currentMessages = [];
   let historyReady = false;
+  const liveScanReports = new Map();
 
   const THEME_KEY = "uda-theme";
 
@@ -35,7 +39,11 @@
   }
 
   function syncSend() {
-    sendBtn.disabled = !input.value.trim() || sendBtn.dataset.busy === "1" || !historyReady;
+    const busy = sendBtn.dataset.busy === "1";
+    sendBtn.hidden = busy;
+    stopBtn.hidden = !busy;
+    sendBtn.disabled = !input.value.trim() || busy || !historyReady;
+    stopBtn.disabled = !busy || stopBtn.dataset.stopping === "1";
   }
 
   input.addEventListener("input", () => {
@@ -51,8 +59,14 @@
   });
 
   sendBtn.addEventListener("click", send);
+  stopBtn.addEventListener("click", cancelChat);
   newChatBtn.addEventListener("click", startNewConversation);
   historyToggle.addEventListener("click", toggleHistory);
+  historyClose.addEventListener("click", closeHistory);
+  historyBackdrop.addEventListener("click", closeHistory);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeHistory();
+  });
 
   function el(tag, className, text) {
     const node = document.createElement(tag);
@@ -184,6 +198,66 @@
     return wrap;
   }
 
+  function showSecurityScanEvent(event) {
+    const scanID = field(event, "id", "ID");
+    const kind = field(event, "type", "Type");
+    if (!scanID || !kind) return;
+
+    let report = liveScanReports.get(scanID);
+    if (!report) {
+      const card = el("section", "scan-report");
+      const heading = el("div", "scan-report-heading", "ClamAV scan");
+      const target = el("div", "scan-report-target", field(event, "path", "Path") || "");
+      const status = el("div", "scan-report-status", "Starting scan…");
+      const findings = el("div", "scan-findings");
+      card.append(heading, target, status, findings);
+      thread.appendChild(card);
+      report = { card, status, findings, count: 0 };
+      liveScanReports.set(scanID, report);
+    }
+
+    const message = field(event, "message", "Message") || "";
+    if (kind === "finding") {
+      report.count++;
+      report.status.textContent = `${report.count} finding${report.count === 1 ? "" : "s"} reported so far — scan still running`;
+      report.findings.appendChild(el("div", "scan-finding", message));
+    } else if (kind === "started") {
+      report.status.textContent = "Scanning… findings will appear here as ClamAV reports them.";
+    } else {
+      const labels = {
+        completed: "Scan completed",
+        infected: "Scan completed with detections",
+        cancelled: "Scan stopped — results are partial",
+        incomplete: "Scan incomplete — results are partial",
+        failed: "Scan failed",
+      };
+      report.status.textContent = labels[kind] || message || kind;
+      report.status.classList.add(`scan-status-${kind}`);
+      if (message) report.status.title = message;
+    }
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  if (window.runtime && typeof window.runtime.EventsOn === "function") {
+    window.runtime.EventsOn("security-scan-update", showSecurityScanEvent);
+    window.runtime.EventsOn("tool-approval-request", (event) => {
+      const id = field(event, "id", "ID");
+      const name = field(event, "name", "Name") || "unknown tool";
+      const args = field(event, "arguments", "Arguments") || {};
+      const description = field(event, "description", "Description") || "";
+      const detail = JSON.stringify(args, null, 2);
+      const risk = name === "go_test"
+        ? "\n\nWARNING: tests can execute project code with your account permissions."
+        : name === "open_uri"
+          ? "\n\nThis opens the requested file or URL using your desktop default handler."
+          : "";
+      const approved = window.confirm(`The assistant requests ${name}.\n${description}${risk}\n\nArguments:\n${detail}\n\nApprove this one action?`);
+      appCall("ApproveToolCall", id, approved).catch((err) => {
+        appendMessage("assistant", `Could not record approval: ${err.message || err}`, { error: true });
+      });
+    });
+  }
+
   function appBridge() {
     return window.go && window.go.main && window.go.main.App;
   }
@@ -207,7 +281,9 @@
       activeConversationId = field(summary, "id", "ID");
       currentMessages = [];
       thread.replaceChildren();
+      liveScanReports.clear();
       await renderHistory();
+      closeHistory();
       input.focus();
     } catch (err) {
       appendMessage("assistant", err.message || String(err), { error: true });
@@ -221,11 +297,12 @@
       activeConversationId = field(conv, "id", "ID");
       currentMessages = field(conv, "messages", "Messages") || [];
       thread.replaceChildren();
+      liveScanReports.clear();
       for (const msg of currentMessages) {
         appendMessage(field(msg, "role", "Role"), field(msg, "content", "Content"));
       }
       await renderHistory();
-      if (window.matchMedia("(max-width: 560px)").matches) historyPanel.classList.remove("mobile-open");
+      closeHistory();
       input.focus();
     } catch (err) {
       appendMessage("assistant", err.message || String(err), { error: true });
@@ -250,9 +327,9 @@
       open.appendChild(el("span", "history-title", title));
       open.appendChild(el("span", "history-date", updated ? new Date(updated).toLocaleString() : ""));
       open.addEventListener("click", () => openConversation(id));
-      const exportBtn = el("button", "history-action", "Export");
+      const exportBtn = el("button", "history-action", "Export JSON");
       exportBtn.type = "button";
-      exportBtn.title = "Download this conversation";
+      exportBtn.title = "Export conversation as JSON";
       exportBtn.addEventListener("click", () => downloadConversation(id));
       const deleteBtn = el("button", "history-action delete", "Delete");
       deleteBtn.type = "button";
@@ -282,36 +359,27 @@
 
   async function downloadConversation(id) {
     try {
-      const conv = await appCall("GetConversation", id);
-      const title = field(conv, "title", "Title") || "conversation";
-      const messages = field(conv, "messages", "Messages") || [];
-      const content = `# ${title}\n\n` + messages.map((msg) => {
-        const role = field(msg, "role", "Role") === "user" ? "You" : "Assistant";
-        return `## ${role}\n\n${field(msg, "content", "Content") || ""}`;
-      }).join("\n\n---\n\n") + "\n";
-      const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${title.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "") || "conversation"}.md`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await appCall("ExportConversation", id);
     } catch (err) {
       appendMessage("assistant", err.message || String(err), { error: true });
     }
   }
 
   function toggleHistory() {
-    if (window.matchMedia("(max-width: 560px)").matches) {
-      historyPanel.classList.toggle("mobile-open");
-      historyToggle.setAttribute("aria-expanded", historyPanel.classList.contains("mobile-open") ? "true" : "false");
-      return;
+    if (historyPanel.classList.contains("open")) closeHistory();
+    else {
+      historyPanel.classList.add("open");
+      historyPanel.setAttribute("aria-hidden", "false");
+      historyBackdrop.classList.add("visible");
+      historyToggle.setAttribute("aria-expanded", "true");
     }
-    const hidden = historyPanel.classList.toggle("hidden");
-    workspace.classList.toggle("history-collapsed", hidden);
-    historyToggle.setAttribute("aria-expanded", hidden ? "false" : "true");
+  }
+
+  function closeHistory() {
+    historyPanel.classList.remove("open");
+    historyPanel.setAttribute("aria-hidden", "true");
+    historyBackdrop.classList.remove("visible");
+    historyToggle.setAttribute("aria-expanded", "false");
   }
 
   async function initializeHistory() {
@@ -332,6 +400,17 @@
     }
   }
 
+  async function cancelChat() {
+    stopBtn.dataset.stopping = "1";
+    stopBtn.textContent = "Stopping…";
+    stopBtn.disabled = true;
+    try {
+      await appCall("CancelChat");
+    } catch (err) {
+      appendMessage("assistant", err.message || String(err), { error: true });
+    }
+  }
+
   async function send() {
     const message = input.value.trim();
     if (!message || sendBtn.dataset.busy === "1" || !historyReady) return;
@@ -342,7 +421,7 @@
     resizeInput();
     sendBtn.dataset.busy = "1";
     syncSend();
-    const pending = appendMessage("assistant", "Thinking…", { pending: true });
+    const pending = appendMessage("assistant", "Working… this may take a while. Use Stop to cancel.", { pending: true });
 
     try {
       const result = await appCall("Chat", message);
@@ -353,9 +432,12 @@
       await renderHistory();
     } catch (err) {
       pending.remove();
-      appendMessage("assistant", err.message || String(err), { error: true });
+      const message = /context canceled/i.test(err.message || "") ? "Stopped." : (err.message || String(err));
+      appendMessage("assistant", message, { error: !/^Stopped\.$/.test(message) });
     } finally {
       sendBtn.dataset.busy = "0";
+      stopBtn.dataset.stopping = "0";
+      stopBtn.textContent = "Stop";
       syncSend();
       input.focus();
     }
