@@ -18,9 +18,9 @@ func main() {
 
 	err := wails.Run(&options.App{
 		Title:     "Ubuntu Dev Assistant",
-		Width:     960,
+		Width:     520,
 		Height:    720,
-		MinWidth:  520,
+		MinWidth:  420,
 		MinHeight: 480,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
