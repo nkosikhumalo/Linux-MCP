@@ -50,7 +50,7 @@ The built-in tools can:
 
 The AI can request a tool, but state-changing or code-executing tools wait for your approval in the desktop app. The standalone MCP server denies those tools because it has no approval UI. The AI decides when to call read-only tools and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
 
-Storage audits only inspect and report. They do not determine whether files or installed applications are unused, and they do not delete or move anything. The assistant can help explain a result and open a reported path for inspection; users decide whether to remove anything themselves. APT/DEB installation dates come from local package logs, which may be incomplete and can include dependencies rather than user-facing apps. Snap, Flatpak, PWA, and manually installed app dates are reported as unknown when no reliable local date is available.
+Storage audits inspect and report only. The largest-file scan uses a bounded min-heap, optional extension hash filtering, a traversal entry limit, and skips virtual directories, symlinks, and mounted filesystems on another device. It reports the largest files; use the folder-size tool to compare directory totals and find caches or other storage-heavy folders. In the desktop app, each reported file has a “Show in Files” link that selects it when the file manager supports selection. Audits do not determine whether files or installed applications are unused, and do not delete or move anything; users decide whether to remove anything themselves. APT/DEB installation dates come from local package logs, which may be incomplete and can include dependencies rather than user-facing apps. Snap, Flatpak, PWA, and manually installed app dates are reported as unknown when no reliable local date is available.
 
 ## How it fits together
 
@@ -163,7 +163,7 @@ Desktop conversations are saved as individual JSON files under `~/.local/share/u
 | --- | --- |
 | `os_info` | Identify the operating system and kernel |
 | `disk_free`, `disk_usage` | Check disk space and folder sizes |
-| `storage_audit` | Find large files under a folder (read-only; reports paths and sizes) |
+| `storage_audit` | Find the largest files under a folder with optional filename or extension filtering and bounded memory (read-only; filename searches ignore size thresholds and scan the full accessible scope) |
 | `mem_free` | Check memory (RAM) use |
 | `top_processes`, `find_process` | Find active processes and heavy CPU/RAM users |
 | `inspect_port`, `list_listening_ports` | See which processes are listening on network ports |
