@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -307,4 +309,48 @@ func (a *App) ListTools() []sys.Tool {
 		return nil
 	}
 	return a.tools.ListTools()
+}
+
+// RevealPath opens a path in the desktop file manager, selecting the file when supported.
+func (a *App) RevealPath(path string) error {
+	path = strings.TrimSpace(path)
+	if strings.HasPrefix(path, "reveal://") {
+		decoded, err := url.QueryUnescape(strings.TrimPrefix(path, "reveal://"))
+		if err != nil {
+			return fmt.Errorf("invalid reveal path: %w", err)
+		}
+		path = decoded
+	}
+	// WebView URL parsing can expose a custom-scheme path without its first slash.
+	if !filepath.IsAbs(path) && strings.HasPrefix(path, "home/") {
+		path = "/" + path
+	}
+	if !filepath.IsAbs(path) || strings.IndexByte(path, 0) >= 0 {
+		return fmt.Errorf("path must be absolute")
+	}
+	path = filepath.Clean(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		_, err = sys.StartDetached("xdg-open", path)
+		return err
+	}
+	for _, manager := range []struct {
+		name string
+		args []string
+	}{
+		{"nautilus", []string{"--select", path}},
+		{"dolphin", []string{"--select", path}},
+	} {
+		if _, err := exec.LookPath(manager.name); err == nil {
+			_, err = sys.StartDetached(manager.name, manager.args...)
+			if err == nil {
+				return nil
+			}
+		}
+	}
+	_, err = sys.StartDetached("xdg-open", filepath.Dir(path))
+	return err
 }
