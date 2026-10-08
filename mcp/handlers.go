@@ -61,11 +61,13 @@ func registerBuiltin(r *Registry) {
 
 	r.RegisterReadOnly(Tool{
 		Name:        "storage_audit",
-		Description: "Read-only scan for the largest files under a directory (default your home folder). Reports exact paths and sizes so the user can inspect them. It never deletes, moves, or modifies files. Do not assume a file or installed app is unused.",
+		Description: "Read-only file search and largest-file scan under a directory (default your home folder). Set query to find filenames by substring; filename queries ignore min_size_mb so small matches are included. Otherwise it reports the largest files with bounded memory and optional extension filtering. Skips virtual paths and other mounted filesystems, filename searches traverse the full accessible scope; largest-file scans stop at 500,000 entries and report when incomplete. Use disk_usage for large folder totals. Never assumes anything is unused or changes files.",
 		InputSchema: objectSchema(map[string]interface{}{
 			"path":        map[string]interface{}{"type": "string", "description": "Absolute directory to scan (default your home folder)."},
 			"min_size_mb": map[string]interface{}{"type": "integer", "description": "Only show files at least this large in MiB (default 100)."},
 			"limit":       map[string]interface{}{"type": "integer", "description": "Maximum results, 1-50 (default 20)."},
+			"extensions":  map[string]interface{}{"type": "string", "description": "Optional comma-separated extension filter such as .mp4,.pdf (default all files)."},
+			"query":       map[string]interface{}{"type": "string", "description": "Optional case-insensitive filename substring. When set, ignores min_size_mb and reports matching files regardless of size."},
 		}),
 	}, handleStorageAudit)
 
