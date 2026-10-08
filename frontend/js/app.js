@@ -59,6 +59,21 @@
   });
 
   sendBtn.addEventListener("click", send);
+  thread.addEventListener("click", async (event) => {
+    const link = event.target.closest("a[href^=\"reveal://\"]");
+    if (!link) return;
+    event.preventDefault();
+    try {
+      const href = link.getAttribute("href");
+      const encoded = href.slice("reveal://".length);
+      // Support both reveal://%2Fhome/... and reveal:///home/... forms.
+      let path = decodeURIComponent(encoded.replace(/\+/g, " "));
+      if (!path.startsWith("/")) path = `/${path.replace(/^\/+/, "")}`;
+      await appCall("RevealPath", path);
+    } catch (err) {
+      appendMessage("assistant", `Could not show that location: ${err.message || err}`, { error: true });
+    }
+  });
   stopBtn.addEventListener("click", cancelChat);
   newChatBtn.addEventListener("click", startNewConversation);
   historyToggle.addEventListener("click", toggleHistory);
@@ -109,6 +124,10 @@
         .replace(/`([^`]+)`/g, "<code>$1</code>")
         .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
         .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>")
+        .replace(
+          /\[([^\]]+)\]\((reveal:\/\/[^)\s]+)\)/g,
+          '<a href="$2" class="reveal-path">$1</a>'
+        )
         .replace(
           /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,
           '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>'
