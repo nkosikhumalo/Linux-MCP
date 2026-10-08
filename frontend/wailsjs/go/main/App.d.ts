@@ -25,3 +25,5 @@ export function ListTools():Promise<Array<mcp.Tool>>;
 export function NewConversation():Promise<main.ConversationSummary>;
 
 export function OpenConversation(arg1:string):Promise<main.Conversation>;
+
+export function RevealPath(arg1:string):Promise<void>;
