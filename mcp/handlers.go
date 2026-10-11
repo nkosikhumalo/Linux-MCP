@@ -149,6 +149,14 @@ func registerBuiltin(r *Registry) {
 	}, handleOpenApp)
 
 	r.Register(Tool{
+		Name:        "remove_app",
+		Description: "Uninstall an app by resolving its owning APT, Snap, or Flatpak package. Requires explicit approval. Manual installs and PWAs are never deleted automatically.",
+		InputSchema: objectSchema(map[string]interface{}{
+			"name": map[string]interface{}{"type": "string", "description": "Installed app name to uninstall."},
+		}, "name"),
+	}, handleRemoveApp)
+
+	r.Register(Tool{
 		Name:        "close_app",
 		Description: "Close an installed app carefully. Will NOT kill the whole browser to close a website tab. PWAs are closed by app-id; flatpak via flatpak kill; apt/snap by process.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -617,6 +625,18 @@ func handleCloseApp(args map[string]interface{}) (string, error) {
 	return StopApp(app)
 }
 
+func handleRemoveApp(args map[string]interface{}) (string, error) {
+	name := strings.TrimSpace(strArg(args, "name", ""))
+	if err := validateAppQuery(name); err != nil {
+		return "", err
+	}
+	app, err := ResolveApp(name)
+	if err != nil {
+		return fmt.Sprintf("status=fail reason=%q\n", err.Error()), nil
+	}
+	return RemoveApp(app)
+}
+
 func handleListApps(args map[string]interface{}) (string, error) {
 	q := strings.TrimSpace(strArg(args, "query", ""))
 	apps := SearchApps(q, 25)
@@ -625,7 +645,11 @@ func handleListApps(args map[string]interface{}) (string, error) {
 	}
 	var b strings.Builder
 	for _, a := range apps {
-		fmt.Fprintf(&b, "- %s [%s] id=%s\n", a.Name, a.Kind, a.ID)
+		if a.Package != "" {
+			fmt.Fprintf(&b, "- %s [%s] id=%s package=%s\n", a.Name, a.Kind, a.ID, a.Package)
+		} else {
+			fmt.Fprintf(&b, "- %s [%s] id=%s package=unknown\n", a.Name, a.Kind, a.ID)
+		}
 	}
 	return b.String(), nil
 }
