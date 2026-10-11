@@ -3,6 +3,9 @@
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
   const stopBtn = document.getElementById("stop");
+  const chatPane = document.querySelector(".chat-pane");
+  const workStatus = document.getElementById("work-status");
+  const workElapsed = document.getElementById("work-elapsed");
   const themeBtn = document.getElementById("theme-btn");
   const themeLabel = document.getElementById("theme-label");
   const newChatBtn = document.getElementById("new-chat");
@@ -15,6 +18,9 @@
   let activeConversationId = null;
   let currentMessages = [];
   let historyReady = false;
+  let workStartedAt = 0;
+  let workTimer = null;
+  const defaultInputPlaceholder = input.placeholder;
   const liveScanReports = new Map();
 
   const THEME_KEY = "uda-theme";
@@ -40,10 +46,34 @@
 
   function syncSend() {
     const busy = sendBtn.dataset.busy === "1";
+    chatPane.setAttribute("aria-busy", String(busy));
     sendBtn.hidden = busy;
     stopBtn.hidden = !busy;
     sendBtn.disabled = !input.value.trim() || busy || !historyReady;
     stopBtn.disabled = !busy || stopBtn.dataset.stopping === "1";
+    // Keep the composer available while the assistant works; drafts stay in
+    // the box and can be sent as soon as the current request finishes.
+    input.placeholder = busy ? "Type a message while I work…" : defaultInputPlaceholder;
+  }
+
+  function formatElapsed(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainder = seconds % 60;
+    return `${minutes}:${String(remainder).padStart(2, "0")}`;
+  }
+
+  function setWorking(isWorking) {
+    if (workTimer) {
+      clearInterval(workTimer);
+      workTimer = null;
+    }
+    workStatus.hidden = !isWorking;
+    if (!isWorking) return;
+    workStartedAt = Date.now();
+    workElapsed.textContent = "0:00";
+    workTimer = setInterval(() => {
+      workElapsed.textContent = formatElapsed(Math.floor((Date.now() - workStartedAt) / 1000));
+    }, 1000);
   }
 
   input.addEventListener("input", () => {
@@ -440,20 +470,19 @@
     resizeInput();
     sendBtn.dataset.busy = "1";
     syncSend();
-    const pending = appendMessage("assistant", "Working… this may take a while. Use Stop to cancel.", { pending: true });
+    setWorking(true);
 
     try {
       const result = await appCall("Chat", message);
-      pending.remove();
       const reply = (result && (result.reply || result.Reply)) || "(empty reply)";
       currentMessages.push({ role: "assistant", content: reply, at: new Date().toISOString() });
       appendMessage("assistant", reply);
       await renderHistory();
     } catch (err) {
-      pending.remove();
       const message = /context canceled/i.test(err.message || "") ? "Stopped." : (err.message || String(err));
       appendMessage("assistant", message, { error: !/^Stopped\.$/.test(message) });
     } finally {
+      setWorking(false);
       sendBtn.dataset.busy = "0";
       stopBtn.dataset.stopping = "0";
       stopBtn.textContent = "Stop";
