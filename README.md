@@ -29,7 +29,7 @@ The app is written in **Go**. Its desktop window is built with **Wails**, and it
 | --- | --- |
 | | Chat with your computer using simple prompts |
 | | Inspect system information, processes, ports, disk, and memory |
-| | Find and open installed apps, including Snap, Flatpak, and PWAs |
+| | Find, open, close, and uninstall package-managed apps, including APT, Snap, and Flatpak apps |
 | | Use the same tools from an MCP-compatible client |
 | | Save, reopen, delete, and download local chat history; use local inference or explicitly opt into OpenRouter |
 | | Switch between dark and light themes in the desktop app |
@@ -41,14 +41,14 @@ The built-in tools can:
 - Show your Linux distribution and kernel details.
 - Check free disk space, directory sizes, the largest files in a folder, and RAM usage.
 - Find processes, show top CPU or memory users, and inspect listening TCP/UDP ports.
-- Search for apps, view available APT/DEB install history, and open or close supported apps.
+- Search for apps, view available APT/DEB install history, open or close supported apps, and uninstall APT/Snap/Flatpak apps after explicit approval. Manual installs and browser apps are reported as unsupported for automatic removal.
 - Open a URL or file with your default desktop handler.
 - Read selected system journal entries and check Git status or recent commits.
 - Run Go tests in a project directory.
 - Run a read-only ClamAV scan, view detections live, and stop it from the desktop app when needed.
 - Stop a user-owned process by PID or exact process name.
 
-The AI can request a tool, but state-changing or code-executing tools wait for your approval in the desktop app. The standalone MCP server denies those tools because it has no approval UI. The AI decides when to call read-only tools and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
+The AI can request a tool, but state-changing or code-executing tools wait for your approval in the desktop app. App removal uses the package manager’s owning package ID and requests administrator authorization where needed. The standalone MCP server denies state-changing tools because it has no approval UI. To enable only app removal in a trusted MCP client, set `MCP_ALLOW_APP_REMOVAL=true` in that server’s environment; the MCP client must provide its own user confirmation. The AI decides when to call read-only tools and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
 
 Storage audits inspect and report only. The largest-file scan uses a bounded min-heap, optional extension hash filtering, a traversal entry limit, and skips virtual directories, symlinks, and mounted filesystems on another device. It reports the largest files; use the folder-size tool to compare directory totals and find caches or other storage-heavy folders. In the desktop app, each reported file has a “Show in Files” link that selects it when the file manager supports selection. Audits do not determine whether files or installed applications are unused, and do not delete or move anything; users decide whether to remove anything themselves. APT/DEB installation dates come from local package logs, which may be incomplete and can include dependencies rather than user-facing apps. Snap, Flatpak, PWA, and manually installed app dates are reported as unknown when no reliable local date is available.
 
@@ -135,7 +135,7 @@ It communicates over **stdio**, so it is intended to be launched by an MCP clien
 }
 ```
 
-Client configuration formats differ; check your MCP client's docs for the correct place to add this entry. Keep standard output reserved for MCP messages when launching the server through a client.
+Client configuration formats differ; check your MCP client's docs for the correct place to add this entry. Keep standard output reserved for MCP messages when launching the server through a client. To allow app removal through this stdio server, set `MCP_ALLOW_APP_REMOVAL=true` in the server process environment using your MCP client's configuration. Without it, app removal stays disabled because stdio has no built-in confirmation dialog.
 
 ## Settings
 
@@ -167,7 +167,7 @@ Desktop conversations are saved as individual JSON files under `~/.local/share/u
 | `mem_free` | Check memory (RAM) use |
 | `top_processes`, `find_process` | Find active processes and heavy CPU/RAM users |
 | `inspect_port`, `list_listening_ports` | See which processes are listening on network ports |
-| `list_apps`, `open_app`, `close_app` | Find, launch, and close supported desktop apps |
+| `list_apps`, `open_app`, `close_app`, `remove_app` | Find, launch, close, and uninstall supported apps; uninstall requires approval |
 | `app_install_history` | Read dated APT/DEB package events from available local logs |
 | `open_uri` | Open a URL or local file with its default app |
 | `stop_process` | Ask a user-owned process to stop |
@@ -193,7 +193,7 @@ Desktop conversations are saved as individual JSON files under `~/.local/share/u
 - Local mode does not send prompts or tool results to a cloud model, but the local model server is software running on your machine and should be kept up to date. OpenRouter mode sends prompts, conversation context, and tool results to OpenRouter and its selected provider; avoid secrets and review that provider's data policy.
 - System tools run on your machine under your user account. They do not automatically gain administrator access, and they cannot read files your account cannot access.
 - App discovery and launch work with desktop entries and common Ubuntu formats; exact support depends on what is installed on your system.
-- The MCP server exposes local machine tools to whichever MCP client launches it; that client can see returned data and may send it to its own model provider. Only add it to a client you trust. State-changing and code-executing tools are denied by the standalone server because it cannot ask you for approval.
+- The MCP server exposes local machine tools to whichever MCP client launches it; that client can see returned data and may send it to its own model provider. Only add it to a client you trust. State-changing tools stay disabled by default in the stdio server. App removal can be enabled with `MCP_ALLOW_APP_REMOVAL=true`; other state-changing tools still require an approval UI.
 
 ## Built with
 
