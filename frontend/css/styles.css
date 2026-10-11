@@ -241,6 +241,53 @@ body {
   white-space: pre-wrap;
 }
 
+.work-status {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 0.05rem 0 0.2rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.work-status[hidden] { display: none; }
+
+.work-status-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.work-elapsed {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.work-progress {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--line);
+}
+
+.work-progress span {
+  display: block;
+  width: 34%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: work-progress-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes work-progress-slide {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(310%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .work-progress span { animation-duration: 3s; }
+}
+
 .composer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
