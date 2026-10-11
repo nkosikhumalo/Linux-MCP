@@ -28,6 +28,7 @@ type AppEntry struct {
 	Name    string
 	ID      string // desktop id without .desktop
 	Kind    AppKind
+	Package string   // package manager ID, when known
 	Exec    []string // trusted argv from .desktop (may include absolute binary path)
 	WMClass string
 	AppID   string // chrome --app-id=… or flatpak id
@@ -120,23 +121,23 @@ func ResolveApp(query string) (*AppEntry, error) {
 	}
 
 	if a := pick(exactName); a != nil {
-		return a, nil
+		return identifyAppPackage(a), nil
 	}
 	if a := pick(exactID); a != nil {
-		return a, nil
+		return identifyAppPackage(a), nil
 	}
 	if a := pick(partial); a != nil {
-		return a, nil
+		return identifyAppPackage(a), nil
 	}
 
 	// PATH binary (apt/snap symlink).
 	if path, err := exec.LookPath(q); err == nil {
-		return &AppEntry{
+		return identifyAppPackage(&AppEntry{
 			Name: q,
 			ID:   q,
 			Kind: kindFromPath(path),
 			Exec: []string{path},
-		}, nil
+		}), nil
 	}
 
 	if url, ok := webAliases[q]; ok {
@@ -144,6 +145,61 @@ func ResolveApp(query string) (*AppEntry, error) {
 	}
 
 	return nil, fmt.Errorf("no installed app matched %q (searched apt/snap/flatpak/PWA desktop entries)", query)
+}
+
+// identifyAppPackage maps a desktop launcher to the package manager's actual ID.
+func identifyAppPackage(app *AppEntry) *AppEntry {
+	if app == nil || app.Kind == KindPWA || app.Kind == KindWeb {
+		return app
+	}
+	switch app.Kind {
+	case KindFlatpak:
+		app.Package = app.AppID
+		if app.Package == "" {
+			app.Package = app.ID
+		}
+	case KindSnap:
+		candidate := strings.SplitN(app.ID, "_", 2)[0]
+		if candidate != "" {
+			if res, err := RunCommand(nil, "snap", "list", candidate); err == nil && res.ExitCode == 0 {
+				lines := strings.Split(res.Stdout, "\n")
+				if len(lines) > 1 {
+					fields := strings.Fields(lines[1])
+					if len(fields) > 0 && fields[0] == candidate {
+						app.Package = candidate
+					}
+				}
+			}
+		}
+	default:
+		if len(app.Exec) == 0 {
+			return app
+		}
+		binary, err := exec.LookPath(app.Exec[0])
+		if err != nil {
+			binary = app.Exec[0]
+		}
+		if resolved, err := filepath.EvalSymlinks(binary); err == nil {
+			binary = resolved
+		}
+		if strings.HasPrefix(binary, "/snap/") {
+			app.Kind = KindSnap
+			parts := strings.Split(strings.TrimPrefix(binary, "/snap/"), "/")
+			if len(parts) > 0 {
+				app.Package = parts[0]
+			}
+			return app
+		}
+		res, err := RunCommand(nil, "dpkg-query", "-S", binary)
+		if err == nil && res.ExitCode == 0 {
+			line, _, _ := strings.Cut(res.Stdout, "\n")
+			owner, _, ok := strings.Cut(line, ": ")
+			if ok {
+				app.Package = owner
+			}
+		}
+	}
+	return app
 }
 
 func kindFromPath(path string) AppKind {
@@ -555,7 +611,7 @@ func SearchApps(query string, limit int) []*AppEntry {
 			}
 			if q == "" || strings.Contains(strings.ToLower(app.Name), q) || strings.Contains(strings.ToLower(app.ID), q) {
 				seen[key] = true
-				out = append(out, app)
+				out = append(out, identifyAppPackage(app))
 			}
 		}
 	}
