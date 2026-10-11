@@ -344,7 +344,7 @@ func isPolicyOrMeta(msg string) bool {
 
 func isDoneActionTool(name string) bool {
 	switch name {
-	case "open_app", "open_uri", "stop_process", "close_app":
+	case "open_app", "open_uri", "stop_process", "close_app", "remove_app":
 		return true
 	default:
 		return false
@@ -365,6 +365,28 @@ func friendlyActionReply(calls []ToolCall, results []string) string {
 		}
 
 		switch {
+		case tc.Function.Name == "remove_app" && strings.Contains(res, "status=ok"):
+			label := strings.Trim(extractField(res, "name"), "\"")
+			if label == "" {
+				label = name
+			}
+			parts = append(parts, fmt.Sprintf("Uninstalled **%s** (%s package %s).", label, extractField(res, "kind"), extractField(res, "package")))
+		case tc.Function.Name == "remove_app" && strings.Contains(res, "status=unsupported"):
+			label := strings.Trim(extractField(res, "name"), "\"")
+			if label == "" {
+				label = name
+			}
+			parts = append(parts, fmt.Sprintf("Could not safely uninstall **%s**: %s.", label, strings.Trim(extractField(res, "reason"), "\"")))
+		case tc.Function.Name == "remove_app" && strings.Contains(res, "status=fail"):
+			label := strings.Trim(extractField(res, "name"), "\"")
+			if label == "" {
+				label = name
+			}
+			reason := strings.Trim(extractField(res, "reason"), "\"")
+			if reason == "" {
+				reason = "the package manager reported a failure"
+			}
+			parts = append(parts, fmt.Sprintf("Could not uninstall **%s**: %s.", label, reason))
 		case strings.Contains(res, "status=fail"):
 			reason := extractField(res, "reason")
 			if reason == "" {
@@ -474,6 +496,6 @@ Diagnostics:
 - "Run the tests" with a performance question means system diagnostics (top_processes), not go test, unless they mention Go/code.
 
 Apps:
-- list_apps / open_app / close_app for apt/snap/flatpak/PWA/web. Websites are browser tabs — close_app will not kill Chrome to close WhatsApp Web.
+- list_apps / open_app / close_app / remove_app for apps. Before removal, use list_apps to identify the installed app and report the package manager and package ID. Call remove_app only after the user has clearly asked to uninstall that app; its approval gate must still be honored. It removes only managed APT/Snap/Flatpak packages. If the install is manual, a PWA, or a website, explain that it could not safely remove it. Never claim an app is installed based only on install history. Websites are browser tabs — close_app will not kill Chrome to close WhatsApp Web.
 
 Stay on topic. Be concise and honest.`
