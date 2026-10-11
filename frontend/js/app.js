@@ -5,7 +5,6 @@
   const stopBtn = document.getElementById("stop");
   const chatPane = document.querySelector(".chat-pane");
   const workStatus = document.getElementById("work-status");
-  const workElapsed = document.getElementById("work-elapsed");
   const themeBtn = document.getElementById("theme-btn");
   const themeLabel = document.getElementById("theme-label");
   const newChatBtn = document.getElementById("new-chat");
@@ -18,7 +17,6 @@
   let activeConversationId = null;
   let currentMessages = [];
   let historyReady = false;
-  let workStartedAt = 0;
   let workTimer = null;
   const defaultInputPlaceholder = input.placeholder;
   const liveScanReports = new Map();
@@ -56,24 +54,18 @@
     input.placeholder = busy ? "Type a message while I work…" : defaultInputPlaceholder;
   }
 
-  function formatElapsed(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const remainder = seconds % 60;
-    return `${minutes}:${String(remainder).padStart(2, "0")}`;
-  }
-
   function setWorking(isWorking) {
     if (workTimer) {
-      clearInterval(workTimer);
+      clearTimeout(workTimer);
       workTimer = null;
     }
-    workStatus.hidden = !isWorking;
+    workStatus.hidden = true;
     if (!isWorking) return;
-    workStartedAt = Date.now();
-    workElapsed.textContent = "0:00";
-    workTimer = setInterval(() => {
-      workElapsed.textContent = formatElapsed(Math.floor((Date.now() - workStartedAt) / 1000));
-    }, 1000);
+    // Avoid flashing a loader for requests that finish quickly.
+    workTimer = setTimeout(() => {
+      workStatus.hidden = false;
+      workTimer = null;
+    }, 1200);
   }
 
   input.addEventListener("input", () => {
@@ -90,6 +82,18 @@
 
   sendBtn.addEventListener("click", send);
   thread.addEventListener("click", async (event) => {
+    const copyButton = event.target.closest("button.copy-code-btn");
+    if (copyButton) {
+      const code = copyButton.closest("pre")?.querySelector("code");
+      if (!code) return;
+      try {
+        await copyText(code.textContent || "");
+        setCopyButtonState(copyButton, "copied");
+      } catch (_) {
+        setCopyButtonState(copyButton, "failed");
+      }
+      return;
+    }
     const link = event.target.closest("a[href^=\"reveal://\"]");
     if (!link) return;
     event.preventDefault();
@@ -118,6 +122,74 @@
     if (className) node.className = className;
     if (text != null) node.textContent = text;
     return node;
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch (_) {
+        // Fall back for embedded webviews where clipboard permissions differ.
+      }
+    }
+    const temporary = el("textarea");
+    temporary.value = text;
+    temporary.setAttribute("readonly", "");
+    temporary.style.position = "fixed";
+    temporary.style.opacity = "0";
+    document.body.appendChild(temporary);
+    temporary.select();
+    const copied = document.execCommand("copy");
+    temporary.remove();
+    if (!copied) throw new Error("Clipboard unavailable");
+  }
+
+  function makeCopyIcon(kind) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 20 20");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.7");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    if (kind === "copied") {
+      path.setAttribute("d", "m4 10 4 4 8-8");
+    } else if (kind === "failed") {
+      path.setAttribute("d", "M6 6l8 8M14 6l-8 8");
+    } else {
+      path.setAttribute("d", "M7 6V4.8A1.8 1.8 0 0 1 8.8 3h6.4A1.8 1.8 0 0 1 17 4.8v8.4a1.8 1.8 0 0 1-1.8 1.8H14M5 7h6.2A1.8 1.8 0 0 1 13 8.8v7.4a1.8 1.8 0 0 1-1.8 1.8H5a1.8 1.8 0 0 1-1.8-1.8V8.8A1.8 1.8 0 0 1 5 7Z");
+    }
+    svg.appendChild(path);
+    return svg;
+  }
+
+  function setCopyButtonState(button, state) {
+    button.replaceChildren(makeCopyIcon(state));
+    const labels = {
+      copy: ["Copy code", "Copy code to clipboard"],
+      copied: ["Copied", "Copied to clipboard"],
+      failed: ["Copy failed", "Could not copy code"],
+    };
+    const [label, title] = labels[state];
+    button.setAttribute("aria-label", label);
+    button.title = title;
+    if (button.copyResetTimer) clearTimeout(button.copyResetTimer);
+    if (state !== "copy") {
+      button.copyResetTimer = setTimeout(() => setCopyButtonState(button, "copy"), 1400);
+    }
+  }
+
+  function addCodeCopyButtons(container) {
+    for (const pre of container.querySelectorAll("pre")) {
+      const button = el("button", "copy-code-btn");
+      button.type = "button";
+      setCopyButtonState(button, "copy");
+      pre.appendChild(button);
+    }
   }
 
   function escapeHtml(s) {
@@ -237,6 +309,7 @@
     if (role === "assistant" && !opts.pending && !opts.error) {
       body.classList.add("md");
       body.innerHTML = renderMarkdown(text);
+      addCodeCopyButtons(body);
     } else {
       body.textContent = text;
     }
