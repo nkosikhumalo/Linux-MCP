@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -15,6 +16,16 @@ import (
 // Run: go run ./cmd/mcp-server
 func main() {
 	reg := sys.DefaultRegistry()
+	// A stdio MCP server has no approval dialog. Keep mutations fail-closed by
+	// default, while allowing an operator to explicitly enable app removal.
+	if os.Getenv("MCP_ALLOW_APP_REMOVAL") == "true" {
+		reg.SetApprovalHandler(func(ctx context.Context, tool sys.Tool, _ map[string]interface{}) error {
+			if tool.Name != "remove_app" {
+				return fmt.Errorf("tool %q requires an approval UI; MCP_ALLOW_APP_REMOVAL only enables remove_app", tool.Name)
+			}
+			return nil
+		})
+	}
 	s := server.NewMCPServer(
 		"Ubuntu Dev Assistant",
 		"0.1.0",
