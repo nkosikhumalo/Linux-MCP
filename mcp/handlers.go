@@ -301,8 +301,16 @@ func handleDiskFree(args map[string]interface{}) (string, error) {
 
 func handleDiskUsage(args map[string]interface{}) (string, error) {
 	path := strings.TrimSpace(strArg(args, "path", "/home"))
-	if path == "" || strings.IndexByte(path, 0) >= 0 {
-		return "", fmt.Errorf("invalid path")
+	if !filepath.IsAbs(path) || strings.IndexByte(path, 0) >= 0 {
+		return "", fmt.Errorf("path must be an absolute directory")
+	}
+	path = filepath.Clean(path)
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("cannot access %s: %w", path, err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("path is not a directory: %s", path)
 	}
 	depth := intArg(args, "depth", 1)
 	if depth < 1 {
@@ -311,7 +319,7 @@ func handleDiskUsage(args map[string]interface{}) (string, error) {
 	if depth > 2 {
 		depth = 2
 	}
-	res, err := RunCommand(nil, "du", "-x", "-h", fmt.Sprintf("--max-depth=%d", depth), path)
+	res, err := RunCommand(nil, "du", "-x", "-h", fmt.Sprintf("--max-depth=%d", depth), "--", path)
 	if err != nil {
 		return "", err
 	}
