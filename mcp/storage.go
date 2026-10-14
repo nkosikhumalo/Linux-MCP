@@ -13,15 +13,23 @@ import (
 )
 
 type storageFile struct {
-	path string
-	size int64
+	path        string
+	logicalSize int64
+	allocated   int64
+	identity    storageFileID
+	hasIdentity bool
+}
+
+type storageFileID struct {
+	device uint64
+	inode  uint64
 }
 
 // storageMinHeap keeps the smallest retained file at its root, so memory use is O(limit).
 type storageMinHeap []storageFile
 
 func (h storageMinHeap) Len() int            { return len(h) }
-func (h storageMinHeap) Less(i, j int) bool  { return h[i].size < h[j].size }
+func (h storageMinHeap) Less(i, j int) bool  { return h[i].allocated < h[j].allocated }
 func (h storageMinHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
 func (h *storageMinHeap) Push(x interface{}) { *h = append(*h, x.(storageFile)) }
 func (h *storageMinHeap) Pop() interface{} {
@@ -91,6 +99,7 @@ func handleStorageAudit(args map[string]interface{}) (string, error) {
 	virtualDirs := map[string]bool{"/proc": true, "/sys": true, "/dev": true, "/run": true}
 	retained := &storageMinHeap{}
 	heap.Init(retained)
+	retainedIDs := make(map[storageFileID]struct{}, limit)
 	var skipped, visited int
 	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		visited++
@@ -140,15 +149,36 @@ func handleStorageAudit(args map[string]interface{}) (string, error) {
 			skipped++
 			return nil
 		}
-		if fi.Size() < minBytes {
+		allocated, identity, hasIdentity := storageFileUsage(fi)
+		if allocated < minBytes {
 			return nil
 		}
-		candidate := storageFile{path: path, size: fi.Size()}
+		candidate := storageFile{
+			path:        path,
+			logicalSize: fi.Size(),
+			allocated:   allocated,
+			identity:    identity,
+			hasIdentity: hasIdentity,
+		}
+		if candidate.hasIdentity {
+			if _, exists := retainedIDs[candidate.identity]; exists {
+				return nil
+			}
+		}
 		if retained.Len() < limit {
 			heap.Push(retained, candidate)
-		} else if candidate.size > (*retained)[0].size {
-			heap.Pop(retained)
+			if candidate.hasIdentity {
+				retainedIDs[candidate.identity] = struct{}{}
+			}
+		} else if candidate.allocated > (*retained)[0].allocated {
+			removed := heap.Pop(retained).(storageFile)
+			if removed.hasIdentity {
+				delete(retainedIDs, removed.identity)
+			}
 			heap.Push(retained, candidate)
+			if candidate.hasIdentity {
+				retainedIDs[candidate.identity] = struct{}{}
+			}
 		}
 		return nil
 	})
@@ -156,13 +186,22 @@ func handleStorageAudit(args map[string]interface{}) (string, error) {
 		return "", err
 	}
 	files := []storageFile(*retained)
-	sort.Slice(files, func(i, j int) bool { return files[i].size > files[j].size })
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].allocated != files[j].allocated {
+			return files[i].allocated > files[j].allocated
+		}
+		if files[i].logicalSize != files[j].logicalSize {
+			return files[i].logicalSize > files[j].logicalSize
+		}
+		return files[i].path < files[j].path
+	})
 	var b strings.Builder
 	fmt.Fprintf(&b, "Read-only storage audit of %s.\n", root)
+	b.WriteString("Files are ranked and filtered by filesystem-reported allocated blocks; logical file length is also shown. Sparse files can have much smaller allocated size. Hard-linked aliases to the same file are listed once. Shared extents or compression may make uniquely reclaimable space differ.\n")
 	if query != "" {
 		fmt.Fprintf(&b, "Filename contains %q; no minimum size applied.\n", query)
 	} else {
-		fmt.Fprintf(&b, "Minimum size: %d MiB.\n", minMB)
+		fmt.Fprintf(&b, "Minimum allocated size: %d MiB.\n", minMB)
 	}
 	if len(extensions) > 0 {
 		fmt.Fprintf(&b, "Extensions: %s\n", strings.Join(sortedKeys(extensions), ", "))
@@ -171,11 +210,11 @@ func handleStorageAudit(args map[string]interface{}) (string, error) {
 		if query != "" {
 			fmt.Fprintf(&b, "No regular file names containing %q were found in the scanned scope.\n", query)
 		} else {
-			b.WriteString("No regular files met the size threshold. Try a lower min_size_mb or use disk_usage for folder totals.\n")
+			b.WriteString("No regular files met the allocated-size threshold. Try a lower min_size_mb or use disk_usage for folder totals.\n")
 		}
 	}
 	for _, f := range files {
-		fmt.Fprintf(&b, "- %s — %s (%d bytes)\n", f.path, humanBytes(f.size), f.size)
+		fmt.Fprintf(&b, "- %s — %s allocated (%d allocated bytes); %s logical (%d logical bytes)\n", f.path, humanBytes(f.allocated), f.allocated, humanBytes(f.logicalSize), f.logicalSize)
 		fmt.Fprintf(&b, "  [Show in Files](reveal://%s)\n", url.QueryEscape(f.path))
 	}
 	if skipped > 0 {
@@ -190,6 +229,19 @@ func handleStorageAudit(args map[string]interface{}) (string, error) {
 	}
 	b.WriteString("Symlinks and virtual directories (/proc, /sys, /dev, /run) are skipped; mounted filesystems on another device are not entered. Use disk_usage to identify large folders and their contents. No files were changed. The user decides whether anything should be removed.")
 	return b.String(), nil
+}
+
+func storageFileUsage(info fs.FileInfo) (allocated int64, identity storageFileID, hasIdentity bool) {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return info.Size(), storageFileID{}, false
+	}
+	allocated = stat.Blocks * 512
+	if stat.Nlink > 1 {
+		identity = storageFileID{device: uint64(stat.Dev), inode: stat.Ino}
+		hasIdentity = true
+	}
+	return allocated, identity, hasIdentity
 }
 
 func deviceID(info fs.FileInfo) (uint64, bool) {
