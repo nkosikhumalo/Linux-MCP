@@ -793,19 +793,6 @@ func handleOpenURI(args map[string]interface{}) (string, error) {
 	return fmt.Sprintf("status=ok kind=uri pid=%d uri=%s\n", pid, uri), nil
 }
 
-// resolveDesktopIDs kept for tests; prefer ResolveApp for launches.
-func resolveDesktopIDs(name string) []string {
-	apps := SearchApps(name, 20)
-	var out []string
-	for _, a := range apps {
-		out = append(out, a.ID)
-	}
-	if len(out) == 0 {
-		out = append(out, name)
-	}
-	return out
-}
-
 func handleGitStatus(args map[string]interface{}) (string, error) {
 	dir, err := requireDir(args)
 	if err != nil {
