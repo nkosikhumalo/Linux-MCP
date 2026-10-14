@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -498,14 +499,13 @@ func pidsMatchingCmdline(substr string) []int {
 	if substr == "" {
 		return nil
 	}
-	uid := os.Getuid()
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
 		return nil
 	}
 	var out []int
 	for _, e := range entries {
-		pid, err := strconvAtoi(e.Name())
+		pid, err := strconv.Atoi(e.Name())
 		if err != nil {
 			continue
 		}
@@ -522,8 +522,6 @@ func pidsMatchingCmdline(substr string) []int {
 		}
 		cmd := strings.ReplaceAll(string(cmdline), "\x00", " ")
 		if strings.Contains(cmd, substr) {
-			// extra: must still be our uid (already checked)
-			_ = uid
 			out = append(out, pid)
 		}
 	}
@@ -546,8 +544,8 @@ func signalPIDs(pids []int) int {
 func parsePIDList(s string) []int {
 	var out []int
 	for _, f := range strings.Fields(s) {
-		n, err := strconvAtoi(f)
-		if err == nil {
+		n, err := strconv.Atoi(f)
+		if err == nil && n > 0 {
 			out = append(out, n)
 		}
 	}
@@ -565,20 +563,6 @@ func uniqueInts(in []int) []int {
 		out = append(out, v)
 	}
 	return out
-}
-
-func strconvAtoi(s string) (int, error) {
-	n := 0
-	if s == "" {
-		return 0, fmt.Errorf("empty")
-	}
-	for _, c := range s {
-		if c < '0' || c > '9' {
-			return 0, fmt.Errorf("not int")
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, nil
 }
 
 // SearchApps returns up to limit matches for a query (for list_apps tool).
