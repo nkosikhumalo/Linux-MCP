@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,13 +49,13 @@ func registerBuiltin(r *Registry) {
 
 	r.RegisterReadOnly(Tool{
 		Name:        "disk_usage",
-		Description: "Show directory sizes via du -h (one level). Cannot read dirs you lack permission for — it will not bypass. Use for storage questions.",
+		Description: "Explain directory storage usage with a recursive du scan on the same filesystem. Reports the largest nested directory totals, sorted by size (default depth 4, configurable to 8), with an explicit complete/partial status. Directory names alone do not establish what files contain. Cannot read dirs you lack permission for — it will not bypass. Use storage_audit to find individual large files.",
 		InputSchema: objectSchema(map[string]interface{}{
 			"path": map[string]interface{}{
 				"type": "string", "description": "Directory to measure (default /home).",
 			},
 			"depth": map[string]interface{}{
-				"type": "integer", "description": "Max depth 1-2 (default 1).",
+				"type": "integer", "description": "Maximum directory depth to scan, 1-8 (default 4). Deeper scans take longer.",
 			},
 		}),
 	}, handleDiskUsage)
@@ -312,18 +313,104 @@ func handleDiskUsage(args map[string]interface{}) (string, error) {
 	if !info.IsDir() {
 		return "", fmt.Errorf("path is not a directory: %s", path)
 	}
-	depth := intArg(args, "depth", 1)
+	depth := intArg(args, "depth", 4)
 	if depth < 1 {
 		depth = 1
 	}
-	if depth > 2 {
-		depth = 2
+	if depth > 8 {
+		depth = 8
 	}
-	res, err := RunCommand(nil, "du", "-x", "-h", fmt.Sprintf("--max-depth=%d", depth), "--", path)
+	res, err := RunCommand(nil, "du", "-x", "-B1", "--null", fmt.Sprintf("--max-depth=%d", depth), "--", path)
 	if err != nil {
 		return "", err
 	}
-	return FormatExec(res), nil
+	return formatDiskUsageResult(res, path, depth), nil
+}
+
+const diskUsageResultLimit = 40
+
+type diskUsageEntry struct {
+	bytes int64
+	path  string
+}
+
+func formatDiskUsageResult(res *ExecResult, root string, depth int) string {
+	var entries []diskUsageEntry
+	truncated := strings.Contains(res.Stdout, "...[output truncated;")
+	for _, record := range strings.Split(res.Stdout, "\x00") {
+		i := strings.IndexByte(record, '\t')
+		if i < 1 {
+			continue
+		}
+		size, err := strconv.ParseInt(record[:i], 10, 64)
+		if err != nil || size < 0 {
+			continue
+		}
+		entries = append(entries, diskUsageEntry{bytes: size, path: record[i+1:]})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].bytes == entries[j].bytes {
+			return entries[i].path < entries[j].path
+		}
+		return entries[i].bytes > entries[j].bytes
+	})
+
+	complete := res.ExitCode == 0 && !res.TimedOut && !res.Cancelled && !truncated && strings.TrimSpace(res.Stderr) == ""
+	var b strings.Builder
+	fmt.Fprintf(&b, "Directory usage under %s (depth %d, same filesystem only)\n", root, depth)
+	if complete {
+		fmt.Fprintln(&b, "Scan status: complete (du exited successfully with no reported errors).")
+	} else {
+		fmt.Fprintf(&b, "Scan status: partial or uncertain (exit=%d", res.ExitCode)
+		if res.TimedOut {
+			b.WriteString(", timed out")
+		}
+		if res.Cancelled {
+			b.WriteString(", cancelled")
+		}
+		if truncated {
+			b.WriteString(", captured output limit reached")
+		}
+		if strings.TrimSpace(res.Stderr) != "" {
+			b.WriteString(", du reported errors")
+		}
+		b.WriteString("). Treat listed sizes as partial; missing paths may be larger.\n")
+	}
+	if len(entries) == 0 {
+		b.WriteString("No directory totals were captured.\n")
+	} else {
+		shown := len(entries)
+		if shown > diskUsageResultLimit {
+			shown = diskUsageResultLimit
+		}
+		fmt.Fprintf(&b, "Largest directory totals (%d shown of %d captured; parent totals include their children):\n", shown, len(entries))
+		for _, entry := range entries[:shown] {
+			fmt.Fprintf(&b, "%s\t%s\n", formatDiskBytes(entry.bytes), entry.path)
+		}
+		if shown < len(entries) {
+			fmt.Fprintf(&b, "%d smaller directory totals omitted.\n", len(entries)-shown)
+		}
+	}
+	if strings.TrimSpace(res.Stderr) != "" {
+		fmt.Fprintf(&b, "du errors:\n%s\n", strings.TrimSpace(res.Stderr))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func formatDiskBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%dB", n)
+	}
+	value := float64(n)
+	units := []string{"KiB", "MiB", "GiB", "TiB", "PiB"}
+	for _, suffix := range units {
+		value /= unit
+		if value < unit || suffix == units[len(units)-1] {
+			return fmt.Sprintf("%.1f%s", value, suffix)
+		}
+	}
+	return fmt.Sprintf("%dB", n)
 }
 
 func handleMemFree(args map[string]interface{}) (string, error) {
