@@ -119,7 +119,15 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 	}
 
 	model := r.pickModel(userMessage)
-	tr.Add("route_decision", model, "fast vs heavy heuristic")
+	deepAnalysis := isDeepAnalysisRequest(userMessage)
+	if deepAnalysis && r.HeavyModel != "" {
+		model = r.HeavyModel
+	}
+	routeDetail := "fast vs heavy heuristic"
+	if deepAnalysis {
+		routeDetail = "deep system analysis: gather and correlate read-only evidence"
+	}
+	tr.Add("route_decision", model, routeDetail)
 
 	r.mu.Lock()
 	prior := append([]ChatMessage(nil), r.history...)
@@ -136,6 +144,7 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 	}
 
 	forceTextOnly := false
+	seenReadOnlyCalls := make(map[string]struct{})
 	for round := 0; round < max; round++ {
 		tr.Add("model_request", model, fmt.Sprintf("round %d", round+1))
 		maxTokens := r.MaxTokens
@@ -149,10 +158,10 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 			MaxTokens: maxTokens,
 		}
 		switch {
-		case forceTextOnly:
+		case forceTextOnly || (round > 0 && round == max-1):
 			// After tools: require a normal chat reply (no more tool spam).
 			req.ToolChoice = "none"
-		case round == 0 && len(tools) > 0 && wantsSystemFacts(userMessage) && !isPolicyOrMeta(userMessage):
+		case round == 0 && len(tools) > 0 && (wantsSystemFacts(userMessage) || deepAnalysis) && !isPolicyOrMeta(userMessage):
 			req.ToolChoice = "required"
 		}
 
@@ -167,6 +176,9 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 
 		if len(msg.ToolCalls) == 0 {
 			reply := strings.TrimSpace(msg.Content)
+			if round > 0 {
+				tr.Add("route_decision", "analysis_stage", "synthesize findings from collected evidence")
+			}
 			r.appendHistory(userMessage, reply)
 			return &RunResult{Reply: reply, Trace: tr.Snapshot()}, nil
 		}
@@ -179,13 +191,30 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 
 		var results []string
 		allDoneActions := len(msg.ToolCalls) > 0
+		allReadOnly := len(msg.ToolCalls) > 0
 		for _, tc := range msg.ToolCalls {
 			name := tc.Function.Name
 			args := parseArgs(tc.Function.Arguments)
 			tr.Add("tool_call", name, tc.Function.Arguments)
 
 			text := "no tool registry configured"
-			if r.Tools != nil {
+			readOnly := r.Tools != nil && r.Tools.IsReadOnly(name)
+			if !readOnly {
+				allReadOnly = false
+			}
+			callKey := ""
+			if readOnly {
+				canonicalArgs, _ := json.Marshal(args)
+				callKey = name + ":" + string(canonicalArgs)
+			}
+			if readOnly && callKey != "" {
+				if _, repeated := seenReadOnlyCalls[callKey]; repeated {
+					text = "This exact read-only query already ran in this analysis. Use the earlier result instead of repeating it."
+				} else {
+					seenReadOnlyCalls[callKey] = struct{}{}
+					text, _ = r.Tools.DispatchContext(ctx, name, args)
+				}
+			} else if r.Tools != nil {
 				text, _ = r.Tools.DispatchContext(ctx, name, args)
 			}
 			tr.Add("tool_result", name, truncate(text, 500))
@@ -216,7 +245,13 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 			return &RunResult{Reply: reply, Trace: tr.Snapshot()}, nil
 		}
 
-		forceTextOnly = true
+		// Continue evidence gathering only while every call in the batch was
+		// classified read-only. State-changing calls still end the turn's action
+		// phase after their approval checks have run.
+		forceTextOnly = !allReadOnly
+		if allReadOnly && round < max-2 {
+			tr.Add("route_decision", "analysis_stage", "review evidence and gather another read-only check only if needed")
+		}
 	}
 
 	reply := "I could not finish within the tool limit. I will not bypass permissions or invent results — ask something my tools can do, or rephrase."
@@ -250,7 +285,8 @@ func (r *Router) pickModel(msg string) string {
 	heavyHints := []string{
 		"debug", "journal", "systemd", "fail", "error", "stack",
 		"test", "race", "refactor", "architect", "port", "ss ",
-		"git ", "diff", "why", "investigate",
+		"git ", "diff", "why", "investigate", "analysis", "analyze",
+		"diagnos", "troubleshoot", "comprehensive", "thorough",
 	}
 	if utf8.RuneCountInString(msg) > 280 {
 		return heavy
@@ -261,6 +297,26 @@ func (r *Router) pickModel(msg string) string {
 		}
 	}
 	return fast
+}
+
+func isDeepAnalysisRequest(msg string) bool {
+	lower := strings.ToLower(msg)
+	asks := []string{"deep", "thorough", "comprehensive", "diagnos", "troubleshoot", "investigate", "analy"}
+	systemTargets := []string{"system", "computer", "laptop", "machine", "my pc", "this pc", "device"}
+	hasTask, hasTarget := false, false
+	for _, hint := range asks {
+		if strings.Contains(lower, hint) {
+			hasTask = true
+			break
+		}
+	}
+	for _, hint := range systemTargets {
+		if strings.Contains(lower, hint) {
+			hasTarget = true
+			break
+		}
+	}
+	return hasTask && hasTarget
 }
 
 func openAITools(reg *sys.Registry) []ChatTool {
@@ -320,6 +376,8 @@ func wantsSystemFacts(msg string) bool {
 		"app", "flatpak", "snap", "pwa",
 		"malware", "virus", "clam", "scan", "security",
 		"os", "ubuntu", "distro", "operating system",
+		"my computer", "this computer", "my laptop", "this laptop",
+		"my machine", "this machine", "my pc", "this pc", "my system",
 	}
 	for _, h := range hints {
 		if strings.Contains(lower, h) {
@@ -488,6 +546,7 @@ How to talk:
 - If a tool returns status=fail, say it failed — never fake success.
 
 Diagnostics:
+- For a deep, thorough, comprehensive, or troubleshooting request about the user's computer, treat it as an investigation: identify likely causes, gather the relevant independent read-only evidence, compare findings, and explain confirmed facts separately from hypotheses and unknowns. Ask for more read-only evidence in follow-up rounds when an earlier result leaves an important question open. Do not repeat an identical tool query. Keep scans and broad filesystem walks out unless they are relevant to the question. Stop gathering once the evidence is sufficient or the tool-round limit is reached.
 - Slow PC / high CPU: use top_processes + mem_free (+ disk_free if useful). Name the heaviest processes from the tool output.
 - Storage questions: use disk_free for filesystem capacity, disk_usage for directory totals, and storage_audit for individual files. disk_usage returns the largest measured directory totals, with parents including their children; do not add parent and child sizes together. Repeat exact paths and sizes from the tool. storage_audit ranks by allocated disk space and separately reports logical file length; label each size correctly and explain that sparse files may allocate less than their logical size. It lists detected hard-linked paths once. Treat scan status as incomplete when the tool says partial/incomplete, and never claim a scan completed unless it says complete. Directory names do not prove what files contain: call a path a cache only when the path itself identifies a cache, and do not describe generic app data as cache/profile data. For a requested filename, use storage_audit with query set to the filename (and omit extensions unless useful); query searches ignore size thresholds and the largest-file scan entry cap. Do not infer that a file is absent from a size-filtered audit, and report whether the scan completed. Preserve each exact [Show in Files](reveal://...) link from storage_audit when listing a result so desktop users can open its location; if no link is available, suggest inspecting the path with open_uri. Never delete or imply an app/file is unused without evidence. Explain safe options and get explicit user direction before any cleanup action. For installed apps, use list_apps to check names; alternatives are suggestions only and should fit the app purpose. Use app_install_history for dated APT/DEB package events; explain that logs may include dependencies or be incomplete. Do not infer dates for Snap, Flatpak, PWA, or manual installs when their date is unavailable.
 - "What OS am I on?": use os_info — never ask them to run lsb_release.

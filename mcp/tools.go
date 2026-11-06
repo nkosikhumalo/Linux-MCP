@@ -85,6 +85,17 @@ func (r *Registry) ListTools() []Tool {
 	return out
 }
 
+// IsReadOnly reports whether a registered tool is classified as read-only.
+// Unknown tools and nil registries are treated as state-changing.
+func (r *Registry) IsReadOnly(name string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.readOnly[name] && r.handlers[name] != nil
+}
+
 // Dispatch runs the named tool. Unknown tools return an error string with isError=true.
 func (r *Registry) Dispatch(name string, args map[string]interface{}) (text string, isError bool) {
 	return r.DispatchContext(context.Background(), name, args)
