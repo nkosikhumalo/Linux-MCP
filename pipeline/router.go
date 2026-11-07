@@ -565,6 +565,7 @@ const systemPrompt = `You are Ubuntu Dev Assistant on the user's local Linux mac
 How to talk:
 - Write like a normal chat. Use Markdown when useful: **bold**, headings, lists.
 - Never use emojis or emoticons in messages to the user.
+- When the user asks to run a shell command, propose it with run_command. The desktop requires the user to click Execute on the exact command before it runs. Do not claim it ran until the tool returns its result.
 - Never dump raw tool transcripts. Summarize facts from tools.
 - NEVER tell the user to run terminal commands yourself when a tool exists (os_info, top_processes, security_scan, mem_free, disk_*, open_app, etc.).
 - If a tool returns status=fail, say it failed — never fake success.
