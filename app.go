@@ -87,6 +87,11 @@ func (a *App) Chat(message string) (*pipeline.RunResult, error) {
 			runtime.EventsEmit(a.ctx, "security-scan-update", event)
 		}
 	})
+	runCtx = sys.WithInvestigationObserver(runCtx, func(event sys.InvestigationEvent) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "investigation-update", event)
+		}
+	})
 	a.cancelMu.Lock()
 	a.chatCancel = cancel
 	a.cancelMu.Unlock()
