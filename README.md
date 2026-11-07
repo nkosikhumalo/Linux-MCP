@@ -149,9 +149,9 @@ The app reads these optional settings from the environment or `.env` file:
 | `LOCAL_MODEL_BASE_URL` | *(required in local mode)* | HTTP endpoint on a loopback IP, such as `http://127.0.0.1:11434/v1` |
 | `LOCAL_MODEL_NAME` | *(required in local mode)* | Model name served by the local endpoint |
 | `OPENROUTER_API_KEY` | *(required in OpenRouter mode)* | Your OpenRouter API key |
-| `OPENROUTER_FAST_MODEL` | `openai/gpt-4o-mini` | Model used for ordinary questions |
-| `OPENROUTER_HEAVY_MODEL` | `openai/gpt-4o-mini` | Model used for longer or more involved system questions |
-| `OPENROUTER_MAX_TOKENS` | `1024` | Maximum response tokens requested from the model |
+| `OPENROUTER_FAST_MODEL` | `openrouter/free` | Free model router used for ordinary questions |
+| `OPENROUTER_HEAVY_MODEL` | `openrouter/free` | Free model router used for longer or more involved system questions |
+| `OPENROUTER_MAX_TOKENS` | `2048` | Maximum response tokens requested from the model |
 
 In OpenRouter mode, the fast and heavy model names can be changed to models available through your OpenRouter account. The router picks between them using simple message hints; by default both settings point to the same model.
 
