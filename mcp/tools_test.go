@@ -28,3 +28,11 @@ func TestDispatchUnknown(t *testing.T) {
 		t.Fatalf("got %q isErr=%v", text, isErr)
 	}
 }
+
+func TestRunCommandFailsClosedWithoutApprovalHandler(t *testing.T) {
+	r := DefaultRegistry()
+	text, isErr := r.Dispatch("run_command", map[string]interface{}{"command": "echo must-not-run"})
+	if !isErr || !strings.Contains(text, "requires explicit user approval") {
+		t.Fatalf("run_command should fail closed without an approval UI: %q isErr=%v", text, isErr)
+	}
+}
