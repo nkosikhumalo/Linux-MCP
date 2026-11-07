@@ -415,6 +415,35 @@
       const args = field(event, "arguments", "Arguments") || {};
       const description = field(event, "description", "Description") || "";
       const detail = JSON.stringify(args, null, 2);
+      if (name === "run_command") {
+        const card = el("section", "command-approval");
+        card.appendChild(el("div", "command-approval-title", "Command ready to run"));
+        card.appendChild(el("p", "command-approval-description", description));
+        const code = el("pre", "command-preview", field(args, "command", "Command") || "");
+        card.appendChild(code);
+        const actions = el("div", "command-approval-actions");
+        const cancel = el("button", "command-cancel", "Cancel");
+        const execute = el("button", "command-execute", "Execute");
+        cancel.type = execute.type = "button";
+        actions.append(cancel, execute);
+        card.appendChild(actions);
+        thread.appendChild(card);
+        scrollThreadToBottom();
+        const resolve = async (approved) => {
+          cancel.disabled = execute.disabled = true;
+          execute.textContent = approved ? "Running…" : "Cancelled";
+          try {
+            const accepted = await appCall("ApproveToolCall", id, approved);
+            if (!accepted) throw new Error("This command request is no longer active");
+            if (!approved) card.classList.add("command-cancelled");
+          } catch (err) {
+            card.appendChild(el("p", "command-approval-error", err.message || String(err)));
+          }
+        };
+        cancel.addEventListener("click", () => resolve(false));
+        execute.addEventListener("click", () => resolve(true));
+        return;
+      }
       const risk = name === "go_test"
         ? "\n\nWARNING: tests can execute project code with your account permissions."
         : name === "open_uri"
@@ -555,14 +584,13 @@
 
   async function initializeHistory() {
     try {
-      const summaries = await appCall("ListConversations");
-      if (summaries && summaries.length) {
-        await openConversation(field(summaries[0], "id", "ID"));
-      } else {
-        const summary = await appCall("NewConversation");
-        activeConversationId = field(summary, "id", "ID");
-        await renderHistory();
-      }
+      // Keep saved conversations in the drawer, but always start on a fresh chat.
+      await renderHistory();
+      const summary = await appCall("NewConversation");
+      activeConversationId = field(summary, "id", "ID");
+      currentMessages = [];
+      thread.replaceChildren();
+      if (emptyState) { thread.appendChild(emptyState); emptyState.hidden = false; }
     } catch (err) {
       appendMessage("assistant", `Could not load local chat history: ${err.message || err}`, { error: true });
     } finally {
