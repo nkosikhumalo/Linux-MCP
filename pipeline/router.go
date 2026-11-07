@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	defaultFastModel  = "openai/gpt-4o-mini"
-	defaultHeavyModel = "openai/gpt-4o-mini"
+	defaultFastModel  = "openrouter/free"
+	defaultHeavyModel = "openrouter/free"
 	defaultMaxRounds  = 6
 	defaultMaxTokens  = 1024
 	maxHistoryMsgs    = 16 // user+assistant pairs kept (approx)
@@ -120,6 +120,9 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 
 	model := r.pickModel(userMessage)
 	deepAnalysis := isDeepAnalysisRequest(userMessage)
+	if deepAnalysis {
+		sys.ReportInvestigation(ctx, sys.InvestigationEvent{Percent: 2, Stage: "Planning", Detail: "Selecting relevant read-only checks"})
+	}
 	if deepAnalysis && r.HeavyModel != "" {
 		model = r.HeavyModel
 	}
@@ -139,6 +142,9 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 
 	tools := openAITools(r.Tools)
 	max := r.MaxRounds
+	if deepAnalysis {
+		max = 12
+	}
 	if max <= 0 {
 		max = defaultMaxRounds
 	}
@@ -146,6 +152,9 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 	forceTextOnly := false
 	seenReadOnlyCalls := make(map[string]struct{})
 	for round := 0; round < max; round++ {
+		if deepAnalysis {
+			sys.ReportInvestigation(ctx, sys.InvestigationEvent{Percent: min(10+round*7, 82), Stage: fmt.Sprintf("Analysis pass %d", round+1), Detail: "Reviewing evidence and deciding whether more checks are needed"})
+		}
 		tr.Add("model_request", model, fmt.Sprintf("round %d", round+1))
 		maxTokens := r.MaxTokens
 		if maxTokens <= 0 {
@@ -175,11 +184,17 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 		tr.Add("model_response", model, summarizeMsg(msg))
 
 		if len(msg.ToolCalls) == 0 {
+			if deepAnalysis {
+				sys.ReportInvestigation(ctx, sys.InvestigationEvent{Percent: 94, Stage: "Synthesizing", Detail: "Checking the answer against collected evidence"})
+			}
 			reply := strings.TrimSpace(msg.Content)
 			if round > 0 {
 				tr.Add("route_decision", "analysis_stage", "synthesize findings from collected evidence")
 			}
 			r.appendHistory(userMessage, reply)
+			if deepAnalysis {
+				sys.ReportInvestigation(ctx, sys.InvestigationEvent{Percent: 100, Stage: "Complete", Detail: "Analysis finished"})
+			}
 			return &RunResult{Reply: reply, Trace: tr.Snapshot()}, nil
 		}
 
@@ -212,6 +227,9 @@ func (r *Router) Run(ctx context.Context, userMessage string) (*RunResult, error
 					text = "This exact read-only query already ran in this analysis. Use the earlier result instead of repeating it."
 				} else {
 					seenReadOnlyCalls[callKey] = struct{}{}
+					if deepAnalysis {
+						sys.ReportInvestigation(ctx, sys.InvestigationEvent{Percent: min(16+len(seenReadOnlyCalls)*8, 78), Stage: "Collecting evidence", Detail: "Running " + name})
+					}
 					text, _ = r.Tools.DispatchContext(ctx, name, args)
 				}
 			} else if r.Tools != nil {
@@ -301,7 +319,7 @@ func (r *Router) pickModel(msg string) string {
 
 func isDeepAnalysisRequest(msg string) bool {
 	lower := strings.ToLower(msg)
-	asks := []string{"deep", "thorough", "comprehensive", "diagnos", "troubleshoot", "investigate", "analy"}
+	asks := []string{"deep", "thorough", "comprehensive", "diagnos", "troubleshoot", "investigate", "analy", "scan"}
 	systemTargets := []string{"system", "computer", "laptop", "machine", "my pc", "this pc", "device"}
 	hasTask, hasTarget := false, false
 	for _, hint := range asks {
@@ -315,6 +333,11 @@ func isDeepAnalysisRequest(msg string) bool {
 			hasTarget = true
 			break
 		}
+	}
+	// A direct request to scan is implicitly about this machine. It should take
+	// the investigation path even when the user does not spell out the target.
+	if strings.Contains(lower, "scan") {
+		return true
 	}
 	return hasTask && hasTarget
 }
