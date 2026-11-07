@@ -20,6 +20,7 @@
   let workTimer = null;
   const defaultInputPlaceholder = input.placeholder;
   const liveScanReports = new Map();
+  let investigationCard = null;
 
   const THEME_KEY = "uda-theme";
 
@@ -360,8 +361,33 @@
     thread.scrollTop = thread.scrollHeight;
   }
 
+  function showInvestigationEvent(event) {
+    const percent = Math.max(0, Math.min(100, Number(field(event, "percent", "Percent") || 0)));
+    const stage = field(event, "stage", "Stage") || "Analyzing";
+    const detail = field(event, "detail", "Detail") || "";
+    if (!investigationCard) {
+      const card = el("section", "scan-report investigation-report");
+      const heading = el("div", "scan-report-heading", "Deep system analysis");
+      const label = el("div", "scan-report-status", stage);
+      const progress = document.createElement("progress");
+      progress.max = 100;
+      progress.value = 0;
+      progress.setAttribute("aria-label", "Analysis progress");
+      const description = el("div", "scan-report-target", detail);
+      card.append(heading, label, progress, description);
+      thread.appendChild(card);
+      investigationCard = { card, label, progress, description };
+    }
+    investigationCard.label.textContent = `${stage} — ${percent}%`;
+    investigationCard.progress.value = percent;
+    investigationCard.description.textContent = detail;
+    if (percent >= 100) investigationCard = null;
+    thread.scrollTop = thread.scrollHeight;
+  }
+
   if (window.runtime && typeof window.runtime.EventsOn === "function") {
     window.runtime.EventsOn("security-scan-update", showSecurityScanEvent);
+    window.runtime.EventsOn("investigation-update", showInvestigationEvent);
     window.runtime.EventsOn("tool-approval-request", (event) => {
       const id = field(event, "id", "ID");
       const name = field(event, "name", "Name") || "unknown tool";
