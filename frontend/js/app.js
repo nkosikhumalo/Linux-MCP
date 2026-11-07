@@ -1,5 +1,6 @@
 (() => {
   const thread = document.getElementById("thread");
+  const emptyState = document.getElementById("empty-state");
   const input = document.getElementById("input");
   const sendBtn = document.getElementById("send");
   const stopBtn = document.getElementById("stop");
@@ -82,6 +83,14 @@
   });
 
   sendBtn.addEventListener("click", send);
+  thread.addEventListener("click", (event) => {
+    const suggestion = event.target.closest("[data-prompt]");
+    if (!suggestion) return;
+    input.value = suggestion.dataset.prompt || "";
+    resizeInput();
+    syncSend();
+    send();
+  });
   thread.addEventListener("click", async (event) => {
     const copyButton = event.target.closest("button.copy-code-btn");
     if (copyButton) {
@@ -304,8 +313,10 @@
   }
 
   function appendMessage(role, text, opts = {}) {
+    const keepFollowing = role === "user" || isThreadNearBottom();
+    if (emptyState) emptyState.hidden = true;
     const wrap = el("article", `msg ${role}${opts.error ? " error" : ""}${opts.pending ? " pending" : ""}`);
-    wrap.appendChild(el("div", "msg-meta", role === "user" ? "You" : "Assistant"));
+    wrap.appendChild(el("div", "msg-meta", role === "user" ? "User" : "Assistant"));
     const body = el("div", "msg-body");
     if (role === "assistant" && !opts.pending && !opts.error) {
       body.classList.add("md");
@@ -317,11 +328,20 @@
     wrap.appendChild(body);
     // Trace stays in the backend only — not shown in the chat UI.
     thread.appendChild(wrap);
-    thread.scrollTop = thread.scrollHeight;
+    if (keepFollowing) scrollThreadToBottom();
     return wrap;
   }
 
+  function isThreadNearBottom() {
+    return thread.scrollHeight - thread.scrollTop - thread.clientHeight < 140;
+  }
+
+  function scrollThreadToBottom() {
+    thread.scrollTop = thread.scrollHeight;
+  }
+
   function showSecurityScanEvent(event) {
+    const keepFollowing = isThreadNearBottom();
     const scanID = field(event, "id", "ID");
     const kind = field(event, "type", "Type");
     if (!scanID || !kind) return;
@@ -358,10 +378,11 @@
       report.status.classList.add(`scan-status-${kind}`);
       if (message) report.status.title = message;
     }
-    thread.scrollTop = thread.scrollHeight;
+    if (keepFollowing) scrollThreadToBottom();
   }
 
   function showInvestigationEvent(event) {
+    const keepFollowing = isThreadNearBottom();
     const percent = Math.max(0, Math.min(100, Number(field(event, "percent", "Percent") || 0)));
     const stage = field(event, "stage", "Stage") || "Analyzing";
     const detail = field(event, "detail", "Detail") || "";
@@ -382,7 +403,7 @@
     investigationCard.progress.value = percent;
     investigationCard.description.textContent = detail;
     if (percent >= 100) investigationCard = null;
-    thread.scrollTop = thread.scrollHeight;
+    if (keepFollowing) scrollThreadToBottom();
   }
 
   if (window.runtime && typeof window.runtime.EventsOn === "function") {
@@ -429,6 +450,7 @@
       activeConversationId = field(summary, "id", "ID");
       currentMessages = [];
       thread.replaceChildren();
+      if (emptyState) { thread.appendChild(emptyState); emptyState.hidden = false; }
       liveScanReports.clear();
       await renderHistory();
       closeHistory();
@@ -445,6 +467,7 @@
       activeConversationId = field(conv, "id", "ID");
       currentMessages = field(conv, "messages", "Messages") || [];
       thread.replaceChildren();
+      if (emptyState) { thread.appendChild(emptyState); emptyState.hidden = true; }
       liveScanReports.clear();
       for (const msg of currentMessages) {
         appendMessage(field(msg, "role", "Role"), field(msg, "content", "Content"));
