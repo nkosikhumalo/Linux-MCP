@@ -225,6 +225,36 @@ func registerBuiltin(r *Registry) {
 			"packages": map[string]interface{}{"type": "string", "description": "Default ./..."},
 		}, "dir"),
 	}, handleGoTest)
+
+	r.Register(Tool{
+		Name:        "run_command",
+		Description: "Propose a shell command for the user to review. The desktop app displays the exact command and will execute it only after the user clicks Execute. Never use this tool for read-only system facts already provided by a dedicated tool.",
+		InputSchema: objectSchema(map[string]interface{}{
+			"command": map[string]interface{}{"type": "string", "description": "Exact shell command to run after the user approves it."},
+		}, "command"),
+	}, handleRunCommand)
+}
+
+func contextFromArgs(args map[string]interface{}) context.Context {
+	if ctx, ok := args[requestContextArg].(context.Context); ok && ctx != nil {
+		return ctx
+	}
+	return context.Background()
+}
+
+func handleRunCommand(args map[string]interface{}) (string, error) {
+	command := strings.TrimSpace(strArg(args, "command", ""))
+	if command == "" {
+		return "", fmt.Errorf("command cannot be empty")
+	}
+	if strings.IndexByte(command, 0) >= 0 {
+		return "", fmt.Errorf("command contains an invalid NUL byte")
+	}
+	res, err := RunCommand(contextFromArgs(args), "sh", "-c", command)
+	if err != nil {
+		return "", err
+	}
+	return FormatExec(res), nil
 }
 
 func objectSchema(props map[string]interface{}, required ...string) ToolInputSchema {
