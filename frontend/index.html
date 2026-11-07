@@ -32,7 +32,18 @@
       </aside>
       <div id="history-backdrop" class="history-backdrop" aria-hidden="true"></div>
       <section class="chat-pane" aria-label="Chat">
-        <main id="thread" class="thread" aria-live="polite"></main>
+        <main id="thread" class="thread" aria-live="polite">
+          <section id="empty-state" class="empty-state" aria-label="Start a conversation">
+            <div class="welcome-mark" aria-hidden="true"></div>
+            <h2>What can I help with?</h2>
+            <p>Ask about your system, investigate an issue, or get help with code.</p>
+            <div class="prompt-suggestions">
+              <button type="button" data-prompt="Give me a quick overview of my system">System overview</button>
+              <button type="button" data-prompt="Check what is using the most CPU and memory">Find what is slowing my PC</button>
+              <button type="button" data-prompt="Help me understand this error">Explain an error</button>
+            </div>
+          </section>
+        </main>
         <footer class="composer">
           <div id="work-status" class="work-status" role="status" aria-live="polite" hidden>
             <span class="work-spinner" aria-hidden="true"></span>
