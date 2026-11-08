@@ -31,18 +31,24 @@ type ExecResult struct {
 
 // RunCommand runs name with args under ctx (default 30s). No shell.
 func RunCommand(ctx context.Context, name string, args ...string) (*ExecResult, error) {
-	return run(ctx, "", nil, name, args...)
+	return run(ctx, "", nil, true, name, args...)
+}
+
+// RunCommandUntilCancelled runs a command without a fixed duration limit.
+// Callers can still stop it by cancelling ctx (the desktop Stop button does this).
+func RunCommandUntilCancelled(ctx context.Context, name string, args ...string) (*ExecResult, error) {
+	return run(ctx, "", nil, false, name, args...)
 }
 
 // RunCommandObserved runs a command and passes each stdout chunk to observe as it arrives.
 // The callback runs on the stdout copy goroutine and should return quickly.
 func RunCommandObserved(ctx context.Context, name string, observe func([]byte), args ...string) (*ExecResult, error) {
-	return run(ctx, "", observe, name, args...)
+	return run(ctx, "", observe, false, name, args...)
 }
 
 // RunInDir is RunCommand with an explicit working directory.
 func RunInDir(ctx context.Context, dir, name string, args ...string) (*ExecResult, error) {
-	return run(ctx, dir, nil, name, args...)
+	return run(ctx, dir, nil, true, name, args...)
 }
 
 // StartDetached launches a process and returns immediately (for GUI apps).
@@ -83,7 +89,7 @@ func startDetached(name string, args ...string) (int, error) {
 	return pid, nil
 }
 
-func run(ctx context.Context, dir string, observe func([]byte), name string, args ...string) (*ExecResult, error) {
+func run(ctx context.Context, dir string, observe func([]byte), applyDefaultTimeout bool, name string, args ...string) (*ExecResult, error) {
 	if err := validateArgv(name, args); err != nil {
 		return nil, err
 	}
@@ -91,10 +97,12 @@ func run(ctx context.Context, dir string, observe func([]byte), name string, arg
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	if _, ok := ctx.Deadline(); !ok {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
-		defer cancel()
+	if applyDefaultTimeout {
+		if _, ok := ctx.Deadline(); !ok {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
+			defer cancel()
+		}
 	}
 
 	start := time.Now()
