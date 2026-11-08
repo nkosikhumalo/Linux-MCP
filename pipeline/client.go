@@ -18,7 +18,7 @@ import (
 
 const (
 	defaultBaseURL = "https://openrouter.ai/api/v1"
-	httpTimeout    = 90 * time.Second
+	httpTimeout    = 10 * time.Minute
 	maxBodyBytes   = 2 << 20 // 2 MiB
 )
 
