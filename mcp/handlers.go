@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -250,11 +251,49 @@ func handleRunCommand(args map[string]interface{}) (string, error) {
 	if strings.IndexByte(command, 0) >= 0 {
 		return "", fmt.Errorf("command contains an invalid NUL byte")
 	}
-	res, err := RunCommand(contextFromArgs(args), "sh", "-c", command)
+	if commandNeedsPassword(command) {
+		return "This command needs administrator authentication. The chat cannot collect passwords; please run this command in your terminal so you can enter your password there.", nil
+	}
+	ctx, cancel := context.WithTimeout(contextFromArgs(args), 2*time.Minute)
+	defer cancel()
+	res, err := RunCommand(ctx, "sh", "-c", command)
 	if err != nil {
 		return "", err
 	}
 	return FormatExec(res), nil
+}
+
+func commandNeedsPassword(command string) bool {
+	if regexp.MustCompile(`(^|[;&|[:space:]])(sudo|pkexec)([[:space:]]|$)`).MatchString(strings.ToLower(command)) {
+		return true
+	}
+	words := strings.Fields(strings.ToLower(command))
+	for _, word := range words {
+		word = strings.Trim(word, "'\"(){}[]")
+		if word == "sudo" || word == "pkexec" {
+			return true
+		}
+	}
+	for i := 0; i+1 < len(words); i++ {
+		binary := strings.Trim(words[i], "'\"(){}[]")
+		action := strings.Trim(words[i+1], "'\"(){}[]")
+		switch binary {
+		case "apt", "apt-get":
+			switch action {
+			case "install", "remove", "purge", "update", "upgrade", "full-upgrade", "autoremove":
+				return true
+			}
+		case "snap":
+			if action == "install" || action == "remove" {
+				return true
+			}
+		case "flatpak":
+			if action == "install" || action == "uninstall" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func objectSchema(props map[string]interface{}, required ...string) ToolInputSchema {
