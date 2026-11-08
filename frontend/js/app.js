@@ -41,8 +41,8 @@
   });
 
   function resizeInput() {
-    // A fixed composer height avoids jumping when the submitted draft clears.
-    input.style.height = "46px";
+    input.style.height = "auto";
+    input.style.height = `${Math.max(46, Math.min(input.scrollHeight, 144))}px`;
   }
 
   function syncSend() {
@@ -339,8 +339,7 @@
 
   function scrollThreadToBottom() {
     requestAnimationFrame(() => {
-      thread.scrollTop = thread.scrollHeight;
-      requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
+      thread.scrollTop = Math.max(0, thread.scrollHeight - thread.clientHeight);
     });
   }
 
@@ -640,7 +639,6 @@
     currentMessages.push({ role: "user", content: message, at: new Date().toISOString() });
     appendMessage("user", message);
     input.value = "";
-    resizeInput();
     sendBtn.dataset.busy = "1";
     syncSend();
     setWorking(true);
