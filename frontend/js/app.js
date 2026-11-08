@@ -21,6 +21,7 @@
   let workTimer = null;
   const defaultInputPlaceholder = input.placeholder;
   const liveScanReports = new Map();
+  const commandCards = [];
   let investigationCard = null;
 
   const THEME_KEY = "uda-theme";
@@ -40,8 +41,8 @@
   });
 
   function resizeInput() {
-    input.style.height = "auto";
-    input.style.height = Math.min(input.scrollHeight, 128) + "px";
+    // A fixed composer height avoids jumping when the submitted draft clears.
+    input.style.height = "46px";
   }
 
   function syncSend() {
@@ -337,7 +338,19 @@
   }
 
   function scrollThreadToBottom() {
-    thread.scrollTop = thread.scrollHeight;
+    requestAnimationFrame(() => {
+      thread.scrollTop = thread.scrollHeight;
+      requestAnimationFrame(() => { thread.scrollTop = thread.scrollHeight; });
+    });
+  }
+
+  function finishCommandCards() {
+    for (const item of commandCards) {
+      if (item.execute.textContent !== "Running…") continue;
+      item.execute.textContent = "Finished";
+      item.card.appendChild(el("p", "command-finished", "Command returned. See the assistant’s response below."));
+    }
+    commandCards.length = 0;
   }
 
   function showSecurityScanEvent(event) {
@@ -364,8 +377,10 @@
       report.count++;
       report.status.textContent = `${report.count} finding${report.count === 1 ? "" : "s"} reported so far — scan still running`;
       report.findings.appendChild(el("div", "scan-finding", message));
+      showInvestigationEvent({ percent: 0, stage: "Security scan running", detail: `${report.count} detection${report.count === 1 ? "" : "s"} reported so far` });
     } else if (kind === "started") {
       report.status.textContent = "Scanning… findings will appear here as ClamAV reports them.";
+      showInvestigationEvent({ percent: 0, stage: "Security scan running", detail: field(event, "path", "Path") || "Waiting for ClamAV to finish" });
     } else {
       const labels = {
         completed: "Scan completed",
@@ -377,6 +392,10 @@
       report.status.textContent = labels[kind] || message || kind;
       report.status.classList.add(`scan-status-${kind}`);
       if (message) report.status.title = message;
+      const scanStage = ["cancelled", "incomplete", "failed"].includes(kind)
+        ? "Scan ended — reviewing available results"
+        : "Scan complete — analyzing results";
+      showInvestigationEvent({ percent: 0, stage: scanStage, detail: message || labels[kind] || kind });
     }
     if (keepFollowing) scrollThreadToBottom();
   }
@@ -399,8 +418,9 @@
       thread.appendChild(card);
       investigationCard = { card, label, progress, description };
     }
-    investigationCard.label.textContent = `${stage} — ${percent}%`;
-    investigationCard.progress.value = percent;
+    investigationCard.label.textContent = stage;
+    if (percent >= 100) investigationCard.progress.value = 100;
+    else investigationCard.progress.removeAttribute("value");
     investigationCard.description.textContent = detail;
     if (percent >= 100) investigationCard = null;
     if (keepFollowing) scrollThreadToBottom();
@@ -419,7 +439,8 @@
         const card = el("section", "command-approval");
         card.appendChild(el("div", "command-approval-title", "Command ready to run"));
         card.appendChild(el("p", "command-approval-description", description));
-        const code = el("pre", "command-preview", field(args, "command", "Command") || "");
+        const code = el("pre", "command-preview");
+        code.appendChild(el("code", "", field(args, "command", "Command") || ""));
         card.appendChild(code);
         const actions = el("div", "command-approval-actions");
         const cancel = el("button", "command-cancel", "Cancel");
@@ -428,6 +449,8 @@
         actions.append(cancel, execute);
         card.appendChild(actions);
         thread.appendChild(card);
+        commandCards.push({ card, execute, cancel });
+        addCodeCopyButtons(card);
         scrollThreadToBottom();
         const resolve = async (approved) => {
           cancel.disabled = execute.disabled = true;
@@ -632,6 +655,7 @@
       const message = /context canceled/i.test(err.message || "") ? "Stopped." : (err.message || String(err));
       appendMessage("assistant", message, { error: !/^Stopped\.$/.test(message) });
     } finally {
+      finishCommandCards();
       setWorking(false);
       sendBtn.dataset.busy = "0";
       stopBtn.dataset.stopping = "0";
