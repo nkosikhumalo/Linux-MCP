@@ -672,7 +672,7 @@ body { font-size: 14px; }
   scroll-behavior: auto;
   overscroll-behavior: contain;
 }
-.msg { max-width: 48rem; content-visibility: auto; contain-intrinsic-size: auto 5rem; }
+.msg { max-width: 48rem; }
 .msg-meta { text-transform: none; font-size: 0.76rem; letter-spacing: 0; font-weight: 600; margin: 0 0 0.35rem 0.2rem; }
 .msg-body { border: 0; border-radius: 0; padding: 0.15rem 0.2rem; line-height: 1.68; }
 .msg.user { display: flex; flex-direction: column; align-items: flex-end; }
@@ -719,7 +719,7 @@ body { font-size: 14px; }
   min-height: 46px; max-height: 9rem; padding: 0.75rem 1rem;
   border-radius: 15px; border-color: var(--line); background: var(--panel);
 }
-#input { height: 46px; max-height: 46px; overflow-y: auto; }
+#input { height: 46px; max-height: 9rem; overflow-y: auto; }
 #input:focus { outline: none; border-color: var(--accent); box-shadow: none; }
 .send-btn { min-width: 4.2rem; padding: 0.65rem 0.9rem; color: #102331; font-weight: 650; }
 .send-btn:disabled { color: var(--muted); background: var(--panel); opacity: 1; }
@@ -739,7 +739,7 @@ html, body, .shell { width: 100%; height: 100%; min-height: 0; overflow: hidden;
 .thread {
   display: flex; min-height: 0; min-width: 0; max-height: 100%;
   overflow-x: hidden; overflow-y: scroll; scrollbar-gutter: stable;
-  scrollbar-width: thin; scrollbar-color: #477f9e transparent;
+  scrollbar-width: thin; scrollbar-color: #477f9e transparent; overflow-anchor: none;
 }
 .thread::-webkit-scrollbar, .history-panel::-webkit-scrollbar { width: 10px; }
 .thread::-webkit-scrollbar-track, .history-panel::-webkit-scrollbar-track { background: transparent; }
