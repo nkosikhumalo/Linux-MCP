@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	sys "ubuntu-dev-assistant/mcp"
+	sys "linux-helper/mcp"
 )
 
 func TestTracerSnapshot(t *testing.T) {
