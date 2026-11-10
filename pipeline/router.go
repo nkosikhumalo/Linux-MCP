@@ -10,7 +10,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	sys "ubuntu-dev-assistant/mcp"
+	sys "linux-helper/mcp"
 )
 
 const (
@@ -560,7 +560,7 @@ func extractField(res, key string) string {
 	return strings.Trim(fields[0], `"`)
 }
 
-const systemPrompt = `You are Ubuntu Dev Assistant on the user's local Linux machine. Tools run as the current user.
+const systemPrompt = `You are Linux Helper on the user's local Linux machine. Tools run as the current user.
 
 How to talk:
 - Write like a normal chat. Use Markdown when useful: **bold**, headings, lists.
