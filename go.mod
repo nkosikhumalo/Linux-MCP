@@ -1,4 +1,4 @@
-module ubuntu-dev-assistant
+module linux-helper
 
 go 1.25.5
 
