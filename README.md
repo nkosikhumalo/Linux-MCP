@@ -2,14 +2,14 @@
 
 # 🐹 Ubuntu Dev Assistant
 
-### Your Linux machine, explained in plain English.
+### Understand your Linux machine. Get real answers from the tools on it.
 
 [![Built with Go](https://img.shields.io/badge/Built%20with-Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![Desktop app](https://img.shields.io/badge/Desktop-Wails-DF0000?style=for-the-badge&logo=wails&logoColor=white)](https://wails.io/)
-[![AI powered](https://img.shields.io/badge/AI-OpenRouter-7C3AED?style=for-the-badge)](https://openrouter.ai/)
+[![Models](https://img.shields.io/badge/Models-Local%20%2B%20OpenRouter-87CEFA?style=for-the-badge)](https://openrouter.ai/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 
-**Ask about your computer. Get useful answers. Let the assistant handle everyday tasks.**
+**Ask a question. Check the evidence. Choose before anything changes.**
 
 </div>
 
@@ -25,14 +25,16 @@ The app is written in **Go**. Its desktop window is built with **Wails**, and it
 
 ## At a glance
 
-| | What it does |
+| Feature | What it does |
 | --- | --- |
-| | Chat with your computer using simple prompts |
-| | Inspect system information, processes, ports, disk, and memory |
-| | Find, open, close, and uninstall package-managed apps, including APT, Snap, and Flatpak apps |
-| | Use the same tools from an MCP-compatible client |
-| | Save, reopen, delete, and download local chat history; use local inference or explicitly opt into OpenRouter |
-| | Switch between dark and light themes in the desktop app |
+| Natural-language system help | Ask about Linux, processes, ports, storage, memory, apps, and logs |
+| Evidence-based investigations | Gather relevant read-only results over multiple bounded rounds and summarize what the tools found |
+| ClamAV scans | View scan findings and scan state in the desktop chat; stop a scan from the app |
+| Command proposals | Review and copy the exact command; it runs only after you press **Execute** |
+| Local chat history | Start fresh, reopen, export, or delete conversations saved on this device |
+| Local or cloud models | Keep requests on a configured loopback model, or opt into OpenRouter's free-model router |
+| Desktop chat | A focused Wails interface with dark and light themes |
+| MCP server | Make the same system tools available to a compatible MCP client |
 
 ## What can it do?
 
@@ -45,19 +47,22 @@ The built-in tools can:
 - Open a URL or file with your default desktop handler.
 - Read selected system journal entries and check Git status or recent commits.
 - Run Go tests in a project directory.
+- Propose a shell command, show the exact command for review, and run it only after you press **Execute** in the desktop app.
 - Run a read-only ClamAV scan, view detections live, and stop it from the desktop app when needed.
 - Stop a user-owned process by PID or exact process name.
 
-The AI can request a tool, but state-changing or code-executing tools wait for your approval in the desktop app. App removal uses the package manager’s owning package ID and requests administrator authorization where needed. The standalone MCP server denies state-changing tools because it has no approval UI. To enable only app removal in a trusted MCP client, set `MCP_ALLOW_APP_REMOVAL=true` in that server’s environment; the MCP client must provide its own user confirmation. The AI decides when to call read-only tools and then explains the result. Some tools depend on Linux utilities being installed, and some results depend on your account's permissions. The security scan does not use `sudo`.
+Read-only checks can run when needed to answer a question. State-changing or code-executing tools—including shell commands, app removal, process stopping, and Go tests—wait for explicit approval in the desktop app. A command card shows the exact command and offers **Copy**, **Execute**, and **Cancel**. Approved commands run for up to two minutes and can be stopped from the app. Commands that need administrator authentication are not given a password prompt in chat; the assistant directs you to run them in a terminal where you can enter your password.
 
-For deeper system investigations, the desktop assistant can gather relevant read-only evidence over several bounded model/tool rounds, skip identical repeated queries, and synthesize the findings at the end. It stops collecting evidence when it has enough or reaches the round limit. Any state-changing tool still uses the desktop approval flow and ends the action phase for that request.
+The standalone MCP server has no approval UI, so it denies state-changing tools. To enable only app removal in a trusted MCP client, set `MCP_ALLOW_APP_REMOVAL=true` in that server's environment; the MCP client must provide its own confirmation. Some tools depend on Linux utilities being installed, and results depend on your account's permissions. The security scan does not use `sudo`.
+
+For deep investigations and scan requests, the desktop assistant can gather relevant read-only evidence over up to 12 model/tool rounds, skip identical repeated queries, and synthesize the findings after requested tools return. The scan card reports real ClamAV start, finding, and completion events; the investigation indicator is indeterminate while a scan is running because ClamAV does not provide a reliable percentage. A stopped, timed-out, or partial scan is not reported as clean.
 
 Storage audits inspect and report only. The largest-file scan ranks by filesystem-reported allocated space, also shows logical file length, and lists detected hard-linked files once. Sparse files can have a much smaller allocated size than logical length. The scan uses a bounded min-heap, optional extension hash filtering, a traversal entry limit, and skips virtual directories, symlinks, and mounted filesystems on another device. Use the folder-size tool to compare directory totals and find caches or other storage-heavy folders. In the desktop app, each reported file has a “Show in Files” link that selects it when the file manager supports selection. Audits do not determine whether files or installed applications are unused, and do not delete or move anything; users decide whether to remove anything themselves. APT/DEB installation dates come from local package logs, which may be incomplete and can include dependencies rather than user-facing apps. Snap, Flatpak, PWA, and manually installed app dates are reported as unknown when no reliable local date is available.
 
 ## How it fits together
 
 ```text
-You ──► Wails desktop chat ──► local loopback model (default) / OpenRouter (opt-in)
+You ──► Wails desktop chat ──► local loopback model (default) / OpenRouter (free router, opt-in)
                                   │
                                   └── requests a local tool
                                            │
@@ -67,7 +72,7 @@ You ──► Wails desktop chat ──► local loopback model (default) / Open
 MCP-compatible client ──► stdio MCP server ──► same Go system tools
 ```
 
-In local mode, the desktop chat sends your message and available tool descriptions only to the configured loopback model endpoint. In OpenRouter mode, it sends them to the selected OpenRouter model. When the model asks for a system check, the Go app runs the matching local tool and sends its result back so the model can answer. The separate MCP server speaks MCP over standard input and output; it does not start the desktop window or call the chat model.
+In local mode, the desktop chat sends your message and available tool descriptions only to the configured loopback model endpoint. In OpenRouter mode, it sends them to the selected model; the default `openrouter/free` router selects an available free model. Free models can be rate-limited or temporarily unavailable. When the model asks for a system check, the Go app runs the matching local tool and sends its result back so the model can answer. The separate MCP server speaks MCP over standard input and output; it does not start the desktop window or call the chat model.
 
 ## Get started
 
@@ -76,7 +81,7 @@ In local mode, the desktop chat sends your message and available tool descriptio
 - Linux (the built-in system tools target Ubuntu and similar Linux desktops).
 - Go **1.25.5** or newer, matching the version in `go.mod`.
 - The [Wails v2 CLI](https://wails.io/docs/gettingstarted/installation/) and its Linux desktop build dependencies to run or build the GUI.
-- A local model server with an OpenAI-compatible API endpoint for the default private mode, or an [OpenRouter API key](https://openrouter.ai/keys) if you explicitly choose cloud mode. The standalone MCP server does not need an API key.
+- A local model server with an OpenAI-compatible API endpoint for private local mode, or an [OpenRouter API key](https://openrouter.ai/keys) if you choose cloud mode. OpenRouter's free-model router does not require purchased model credits, but still has provider availability and rate limits. The standalone MCP server does not need an API key.
 
 ### 1. Get the project
 
@@ -97,7 +102,7 @@ cp .env.example .env
 
 Local inference is the default for new configurations. Set `LOCAL_MODEL_BASE_URL` to your local model server and `LOCAL_MODEL_NAME` to a model it provides. The endpoint must use HTTP on the loopback IP `127.0.0.1` or `::1`; the app rejects hostnames and remote endpoints, disables environment proxy use, and does not follow redirects in local mode.
 
-To use OpenRouter in a new configuration, explicitly set `AI_MODE=openrouter` and provide `OPENROUTER_API_KEY`. Existing setups with an OpenRouter key and no `AI_MODE` keep using OpenRouter for compatibility; set `AI_MODE=local` to prevent cloud fallback. In that mode, your chat, conversation context, and tool results are sent to the cloud provider; check its retention and training policy. Keep `.env` private and out of Git.
+To use OpenRouter, set `AI_MODE=openrouter` and provide `OPENROUTER_API_KEY`. The example configuration selects `openrouter/free` for both ordinary chat and deeper investigations. Existing setups with an OpenRouter key and no `AI_MODE` keep using OpenRouter for compatibility; set `AI_MODE=local` to prevent cloud fallback. In cloud mode, your chat, conversation context, and tool results are sent to the cloud provider; check its retention and training policy. Keep `.env` private and out of Git.
 
 ### 3. Launch the desktop app
 
@@ -114,6 +119,20 @@ wails build
 ```
 
 Wails may need Linux development libraries for GTK and WebKitGTK. See the [Wails Linux setup guide](https://wails.io/docs/gettingstarted/installation/) for the package list for your distribution.
+
+## Linux compatibility
+
+This project targets Linux desktops, but it is not guaranteed to run on every Linux distribution or machine. The Wails build is configured with the `webkit2_41` tag, so the desktop app needs GTK and WebKit2GTK **4.1** runtime libraries. Compatible examples include Ubuntu 22.04 or newer, Debian 12 or newer, Fedora 40 or newer, Arch Linux, and openSUSE; package names and installation steps vary. See the [Wails v2 distro guide](https://v2.wails.io/docs/v2.15.0/guides/linux-distro-support/) before building or packaging for another system.
+
+Most system checks use common Linux utilities such as `free`, `ss`, `df`, `du`, and `ps`. Some features need additional software or a specific system setup:
+
+- App install history and APT package removal use `dpkg`/APT, so they are intended for Debian-based systems.
+- Snap and Flatpak actions need their respective package managers to be installed.
+- Journal queries need `journalctl` and a systemd-based system.
+- Virus scans need ClamAV's `clamscan` utility.
+- Opening files and desktop apps depends on desktop entries and `xdg-open` being available.
+
+On other distributions, features may be unavailable when their required tool or package format is absent. The assistant reports those limitations; distribution-wide compatibility has not been tested.
 
 ### 4. Run the MCP server (optional)
 
@@ -151,13 +170,15 @@ The app reads these optional settings from the environment or `.env` file:
 | `OPENROUTER_API_KEY` | *(required in OpenRouter mode)* | Your OpenRouter API key |
 | `OPENROUTER_FAST_MODEL` | `openrouter/free` | Free model router used for ordinary questions |
 | `OPENROUTER_HEAVY_MODEL` | `openrouter/free` | Free model router used for longer or more involved system questions |
-| `OPENROUTER_MAX_TOKENS` | `2048` | Maximum response tokens requested from the model |
+| `OPENROUTER_MAX_TOKENS` | `1024` (fallback) | Maximum response tokens requested from the model; `.env.example` sets this to `2048` |
+
+Model requests can take up to ten minutes; use **Stop** to cancel a stalled request. This limit applies per model request, not to the total duration of a multi-round investigation.
 
 In OpenRouter mode, the fast and heavy model names can be changed to models available through your OpenRouter account. The router picks between them using simple message hints; by default both settings point to the same model.
 
 ## Local chat history
 
-Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. There is no database or cloud history store in this feature. The app can reopen a saved chat, continue it with recent messages as model context, delete it, or export a JSON copy to a location chosen by the user. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model endpoint as part of the ordinary chat request. With local mode, that endpoint is restricted to loopback; with OpenRouter mode, the context leaves the machine.
+Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. There is no database or cloud history store in this feature. Every app launch opens a new chat; saved chats remain available in the history drawer. You can reopen, continue, delete, or export a JSON copy of a conversation. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model endpoint as part of the ordinary chat request. With local mode, that endpoint is restricted to loopback; with OpenRouter mode, the context leaves the machine.
 
 ## Built-in MCP tools
 
@@ -177,6 +198,7 @@ Desktop conversations are saved as individual JSON files under `~/.local/share/u
 | `journalctl` | Read filtered systemd journal entries |
 | `git_status`, `git_log` | View a repository's status and recent commits |
 | `go_test` | Run Go tests in a project directory |
+| `run_command` | Propose a shell command; desktop execution requires an explicit **Execute** click and is unavailable in the standalone MCP server |
 
 ## Project map
 
