@@ -1,13 +1,13 @@
 <div align="center">
 
-# 🐹 Ubuntu Dev Assistant
+# Linux Helper
 
 ### Understand your Linux machine. Get real answers from the tools on it.
 
 [![Built with Go](https://img.shields.io/badge/Built%20with-Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)](https://go.dev/)
 [![Desktop app](https://img.shields.io/badge/Desktop-Wails-DF0000?style=for-the-badge&logo=wails&logoColor=white)](https://wails.io/)
 [![Models](https://img.shields.io/badge/Models-Local%20%2B%20OpenRouter-87CEFA?style=for-the-badge)](https://openrouter.ai/)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Ubuntu-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+[![Platform](https://img.shields.io/badge/Platform-Linux-111111?style=for-the-badge&logo=linux&logoColor=white)](https://kernel.org/)
 
 **Ask a question. Check the evidence. Choose before anything changes.**
 
@@ -17,7 +17,7 @@
 
 ## What is it?
 
-Ubuntu Dev Assistant is a desktop chat app and a standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for Linux. You can ask an AI questions about your machine in everyday language. The assistant can look up system details with local tools, explain what it finds, and help with common actions such as opening an app.
+Linux Helper is a desktop chat app and a standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for Linux. Ask questions about your machine in everyday language. The assistant can check system details with local tools, explain what it finds, and help with common actions such as opening an app.
 
 The app is written in **Go**. Its desktop window is built with **Wails**, and its chat model can run through a loopback local model endpoint by default, or through **OpenRouter** when explicitly enabled. The MCP server makes the same machine tools available to other MCP-compatible AI apps.
 
@@ -87,7 +87,7 @@ In local mode, the desktop chat sends your message and available tool descriptio
 
 ```bash
 git clone <your-repository-url>
-cd ubuntu-dev-assistant
+cd linux-helper
 ```
 
 Replace `<your-repository-url>` with the URL of your Git repository.
@@ -147,10 +147,10 @@ It communicates over **stdio**, so it is intended to be launched by an MCP clien
 ```json
 {
   "mcpServers": {
-    "ubuntu-dev-assistant": {
+    "linux-helper": {
       "command": "go",
       "args": ["run", "./cmd/mcp-server"],
-      "cwd": "/absolute/path/to/ubuntu-dev-assistant"
+      "cwd": "/absolute/path/to/linux-helper"
     }
   }
 }
@@ -178,7 +178,7 @@ In OpenRouter mode, the fast and heavy model names can be changed to models avai
 
 ## Local chat history
 
-Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. There is no database or cloud history store in this feature. Every app launch opens a new chat; saved chats remain available in the history drawer. You can reopen, continue, delete, or export a JSON copy of a conversation. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model endpoint as part of the ordinary chat request. With local mode, that endpoint is restricted to loopback; with OpenRouter mode, the context leaves the machine.
+Desktop conversations are saved as individual JSON files under `~/.local/share/ubuntu-dev-assistant/conversations/` with user-only file permissions. This existing data directory name is retained across the product rename so saved chats remain available. There is no database or cloud history store in this feature. Every app launch opens a new chat; saved chats remain available in the history drawer. You can reopen, continue, delete, or export a JSON copy of a conversation. Saved history contains visible user and assistant messages; internal tool traces and tool results are not saved. Continuing a chat sends its recent context to the configured model endpoint as part of the ordinary chat request. With local mode, that endpoint is restricted to loopback; with OpenRouter mode, the context leaves the machine.
 
 ## Built-in MCP tools
 
