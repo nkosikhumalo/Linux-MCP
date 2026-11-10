@@ -127,8 +127,8 @@ func (c *Client) ChatCompletion(ctx context.Context, req CompletionRequest) (*Co
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	if !c.local {
-		httpReq.Header.Set("HTTP-Referer", "https://localhost/ubuntu-dev-assistant")
-		httpReq.Header.Set("X-Title", "Ubuntu Dev Assistant")
+		httpReq.Header.Set("HTTP-Referer", "https://localhost/linux-helper")
+		httpReq.Header.Set("X-Title", "Linux Helper")
 	}
 
 	res, err := c.http.Do(httpReq)
