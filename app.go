@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
-	sys "ubuntu-dev-assistant/mcp"
-	"ubuntu-dev-assistant/pipeline"
+	sys "linux-helper/mcp"
+	"linux-helper/pipeline"
 )
 
 // App holds shared backend state for the desktop UI.
