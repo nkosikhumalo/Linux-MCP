@@ -9,7 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	sys "ubuntu-dev-assistant/mcp"
+	sys "linux-helper/mcp"
 )
 
 // MCP stdio server (separate from the Wails desktop UI).
@@ -27,7 +27,7 @@ func main() {
 		})
 	}
 	s := server.NewMCPServer(
-		"Ubuntu Dev Assistant",
+		"Linux Helper",
 		"0.1.0",
 		server.WithToolCapabilities(true),
 	)
