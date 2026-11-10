@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "Ubuntu Dev Assistant",
-  "outputfilename": "ubuntu-dev-assistant",
+  "name": "Linux Helper",
+  "outputfilename": "linux-helper",
   "frontend:dir": "frontend",
   "frontend:install": "",
   "frontend:build": "",
@@ -9,13 +9,13 @@
   "frontend:dev:serverUrl": "",
   "build:tags": "webkit2_41",
   "author": {
-    "name": "Ubuntu Dev Assistant",
+    "name": "Linux Helper",
     "email": ""
   },
   "info": {
-    "companyName": "Ubuntu Dev Assistant",
-    "productName": "Ubuntu Dev Assistant",
+    "companyName": "Linux Helper",
+    "productName": "Linux Helper",
     "productVersion": "0.1.0",
-    "comments": "Local Ubuntu development assistant"
+    "comments": "Linux desktop assistant"
   }
 }
