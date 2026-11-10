@@ -17,7 +17,7 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:     "Ubuntu Dev Assistant",
+		Title:     "Linux Helper",
 		Width:     520,
 		Height:    720,
 		MinWidth:  420,
