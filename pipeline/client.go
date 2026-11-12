@@ -35,8 +35,17 @@ func NewClient(apiKey string) *Client {
 	return &Client{
 		apiKey:  strings.TrimSpace(apiKey),
 		baseURL: defaultBaseURL,
-		http:    &http.Client{Timeout: httpTimeout},
+		http: &http.Client{
+			Timeout:       httpTimeout,
+			CheckRedirect: rejectRedirects,
+		},
 	}
+}
+
+// Model endpoints receive conversation content, so never forward a request to
+// a redirect target. This applies to both cloud and local clients.
+func rejectRedirects(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 // NewClientFromEnv loads .env and selects a model transport. Explicit local mode
@@ -79,7 +88,7 @@ func NewClientFromEnv() (*Client, error) {
 }
 
 func newLocalClient(baseURL string) *Client {
-	return &Client{baseURL: baseURL, local: true, http: &http.Client{Timeout: httpTimeout, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	return &Client{baseURL: baseURL, local: true, http: &http.Client{Timeout: httpTimeout, Transport: &http.Transport{Proxy: nil}, CheckRedirect: rejectRedirects}}
 }
 
 func isLocalEndpoint(raw string) bool {
@@ -137,9 +146,12 @@ func (c *Client) ChatCompletion(ctx context.Context, req CompletionRequest) (*Co
 	}
 	defer res.Body.Close()
 
-	raw, err := io.ReadAll(io.LimitReader(res.Body, maxBodyBytes))
+	raw, err := io.ReadAll(io.LimitReader(res.Body, maxBodyBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(raw) > maxBodyBytes {
+		return nil, fmt.Errorf("model API response exceeds %d-byte limit", maxBodyBytes)
 	}
 
 	var out CompletionResponse
