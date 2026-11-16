@@ -366,6 +366,33 @@ body {
   gap: 0.45rem;
 }
 
+.privacy-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 34px;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: help;
+}
+
+.privacy-mode::before {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--muted);
+  content: "";
+}
+
+.privacy-mode[data-mode="local"]::before { background: #22c55e; }
+.privacy-mode[data-mode="cloud"]::before { background: #f59e0b; }
+.privacy-mode[data-mode="unavailable"]::before { background: var(--danger); }
+
 .workspace {
   min-height: 0;
   display: grid;
