@@ -22,6 +22,7 @@ import (
 type App struct {
 	ctx              context.Context
 	router           *pipeline.Router
+	privacyMode      string
 	tools            *sys.Registry
 	err              error // setup error (e.g. missing API key)
 	store            *conversationStore
@@ -40,7 +41,14 @@ func NewApp() *App {
 	tools := sys.DefaultRegistry()
 	store, storeErr := newConversationStore()
 	client, err := pipeline.NewClientFromEnv()
-	a := &App{tools: tools, store: store, storeErr: storeErr, pendingApprovals: make(map[string]chan bool)}
+	privacyMode := "unavailable"
+	if client != nil {
+		privacyMode = "cloud"
+		if client.IsLocal() {
+			privacyMode = "local"
+		}
+	}
+	a := &App{tools: tools, privacyMode: privacyMode, store: store, storeErr: storeErr, pendingApprovals: make(map[string]chan bool)}
 	tools.SetApprovalHandler(a.requestToolApproval)
 	tools.SetSensitiveReadApprovalHandler(func(ctx context.Context, tool sys.Tool, args map[string]interface{}) error {
 		if client != nil && client.IsLocal() {
@@ -60,6 +68,9 @@ func NewApp() *App {
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 }
+
+// PrivacyMode reports where chat prompts and tool results are processed.
+func (a *App) PrivacyMode() string { return a.privacyMode }
 
 // Chat runs one user turn through the orchestrator.
 func (a *App) Chat(message string) (*pipeline.RunResult, error) {
