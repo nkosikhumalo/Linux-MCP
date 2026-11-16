@@ -9,6 +9,7 @@
   const themeBtn = document.getElementById("theme-btn");
   const themeLabel = document.getElementById("theme-label");
   const privacyMode = document.getElementById("privacy-mode");
+  const systemPulseBtn = document.getElementById("system-pulse-btn");
   const newChatBtn = document.getElementById("new-chat");
   const historyToggle = document.getElementById("history-toggle");
   const historyClose = document.getElementById("history-close");
@@ -85,6 +86,7 @@
   });
 
   sendBtn.addEventListener("click", send);
+  systemPulseBtn.addEventListener("click", runSystemPulse);
   thread.addEventListener("click", (event) => {
     const suggestion = event.target.closest("[data-prompt]");
     if (!suggestion) return;
@@ -332,6 +334,52 @@
     thread.appendChild(wrap);
     if (keepFollowing) scrollThreadToBottom();
     return wrap;
+  }
+
+  async function runSystemPulse() {
+    if (emptyState) emptyState.hidden = true;
+    const card = el("section", "system-pulse-card");
+    card.setAttribute("aria-label", "Local System Pulse");
+    const heading = el("div", "pulse-heading");
+    const headingText = el("div", "pulse-heading-text");
+    headingText.append(el("span", "pulse-eyebrow", "LOCAL SNAPSHOT"), el("h2", "", "System Pulse"));
+    const refresh = el("button", "icon-btn pulse-refresh", "Refresh");
+    refresh.type = "button";
+    heading.append(headingText, refresh);
+    const status = el("p", "pulse-status", "Checking this device…");
+    const grid = el("div", "pulse-grid");
+    card.append(heading, status, grid);
+    thread.appendChild(card);
+
+    const fields = [
+      ["system", "Operating system"],
+      ["memory", "Memory"],
+      ["disk", "Disk space"],
+      ["processes", "Top processes by CPU"],
+    ];
+    const refreshSnapshot = async () => {
+      refresh.disabled = true;
+      status.textContent = "Checking this device…";
+      grid.replaceChildren();
+      try {
+        const snapshot = await appCall("SystemSnapshot");
+        for (const [key, label] of fields) {
+          const panel = el("section", "pulse-panel");
+          panel.appendChild(el("h3", "", label));
+          const output = el("pre", "pulse-output", snapshot[key] || "No data returned.");
+          panel.appendChild(output);
+          grid.appendChild(panel);
+        }
+        status.textContent = `Updated ${new Date().toLocaleTimeString()} · nothing was sent to the model`;
+      } catch (err) {
+        status.textContent = `Could not read system status: ${err.message || err}`;
+      } finally {
+        refresh.disabled = false;
+        scrollThreadToBottom();
+      }
+    };
+    refresh.addEventListener("click", refreshSnapshot);
+    await refreshSnapshot();
   }
 
   function isThreadNearBottom() {
