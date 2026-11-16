@@ -42,6 +42,9 @@ func NewClient(apiKey string) *Client {
 	}
 }
 
+// IsLocal reports whether this client sends requests only to a loopback model.
+func (c *Client) IsLocal() bool { return c != nil && c.local }
+
 // Model endpoints receive conversation content, so never forward a request to
 // a redirect target. This applies to both cloud and local clients.
 func rejectRedirects(*http.Request, []*http.Request) error {
