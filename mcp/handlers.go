@@ -61,7 +61,7 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleDiskUsage)
 
-	r.RegisterReadOnly(Tool{
+	r.RegisterSensitiveReadOnly(Tool{
 		Name:        "storage_audit",
 		Description: "Read-only file search and largest-file scan under a directory (default your home folder). Ranks and filters by allocated disk space, also reports logical file length, and lists detected hard-linked files once. Set query to find filenames by substring; filename queries ignore min_size_mb so small matches are included. Otherwise it reports the largest files with bounded memory and optional extension filtering. Skips virtual paths and other mounted filesystems, filename searches traverse the full accessible scope; largest-file scans stop at 500,000 entries and report when incomplete. Use disk_usage for large folder totals. Never assumes anything is unused or changes files.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -98,7 +98,7 @@ func registerBuiltin(r *Registry) {
 		}),
 	}, handleTopProcesses)
 
-	r.RegisterReadOnly(Tool{
+	r.RegisterSensitiveReadOnly(Tool{
 		Name:        "security_scan",
 		Description: "Run a read-only ClamAV scan, stream detected file findings to the desktop UI as they arrive, and report the final status. Waits for completion by default; optional timeout is supported. It never deletes or quarantines files.",
 		InputSchema: objectSchema(map[string]interface{}{
@@ -208,7 +208,7 @@ func registerBuiltin(r *Registry) {
 		}, "dir"),
 	}, handleGitLog)
 
-	r.RegisterReadOnly(Tool{
+	r.RegisterSensitiveReadOnly(Tool{
 		Name:        "journalctl",
 		Description: "Query systemd journal (narrow filters preferred).",
 		InputSchema: objectSchema(map[string]interface{}{
