@@ -26,4 +26,6 @@ export function NewConversation():Promise<main.ConversationSummary>;
 
 export function OpenConversation(arg1:string):Promise<main.Conversation>;
 
+export function PrivacyMode():Promise<string>;
+
 export function RevealPath(arg1:string):Promise<void>;
