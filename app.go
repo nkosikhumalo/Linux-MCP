@@ -72,6 +72,30 @@ func (a *App) Startup(ctx context.Context) {
 // PrivacyMode reports where chat prompts and tool results are processed.
 func (a *App) PrivacyMode() string { return a.privacyMode }
 
+// SystemSnapshot gathers a small local-only status panel without contacting
+// the configured model or saving the results to conversation history.
+func (a *App) SystemSnapshot() map[string]string {
+	checks := []struct {
+		key  string
+		tool string
+		args map[string]interface{}
+	}{
+		{key: "system", tool: "os_info"},
+		{key: "memory", tool: "mem_free"},
+		{key: "disk", tool: "disk_free"},
+		{key: "processes", tool: "top_processes", args: map[string]interface{}{"limit": 5, "sort": "cpu"}},
+	}
+	result := make(map[string]string, len(checks))
+	for _, check := range checks {
+		text, isError := a.tools.DispatchContext(context.Background(), check.tool, check.args)
+		if isError {
+			text = "Unavailable: " + text
+		}
+		result[check.key] = text
+	}
+	return result
+}
+
 // Chat runs one user turn through the orchestrator.
 func (a *App) Chat(message string) (*pipeline.RunResult, error) {
 	a.chatMu.Lock()
