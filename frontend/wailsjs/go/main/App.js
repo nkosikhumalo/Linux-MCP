@@ -46,6 +46,10 @@ export function OpenConversation(arg1) {
   return window['go']['main']['App']['OpenConversation'](arg1);
 }
 
+export function PrivacyMode() {
+  return window['go']['main']['App']['PrivacyMode']();
+}
+
 export function RevealPath(arg1) {
   return window['go']['main']['App']['RevealPath'](arg1);
 }
