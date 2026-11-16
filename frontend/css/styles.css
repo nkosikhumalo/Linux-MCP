@@ -930,3 +930,34 @@ html, body, .shell { width: 100%; height: 100%; min-height: 0; overflow: hidden;
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+.system-pulse-btn {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 650 !important;
+}
+.system-pulse-btn:hover { filter: brightness(1.08); }
+.empty-state .pulse-caption { margin: 0.8rem 0 0; font-size: 0.78rem; }
+.system-pulse-card {
+  width: min(54rem, 100%);
+  margin: 0 auto;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  animation: rise 180ms ease-out;
+}
+.pulse-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.pulse-heading-text h2 { margin: 0; font-size: 1.15rem; }
+.pulse-eyebrow { color: var(--accent); font-size: 0.65rem; font-weight: 750; letter-spacing: 0.12em; }
+.pulse-status { margin: 0.6rem 0 0.9rem; color: var(--muted); font-size: 0.78rem; }
+.pulse-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.65rem; }
+.pulse-panel { min-width: 0; padding: 0.8rem; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); }
+.pulse-panel:last-child { grid-column: 1 / -1; }
+.pulse-panel h3 { margin: 0 0 0.55rem; font-size: 0.78rem; }
+.pulse-output { max-height: 14rem; margin: 0; overflow: auto; color: var(--muted); font-family: var(--mono); font-size: 0.69rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .pulse-grid { grid-template-columns: minmax(0, 1fr); }
+  .pulse-panel:last-child { grid-column: auto; }
+}
