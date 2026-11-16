@@ -29,11 +29,13 @@ const requestContextArg = "_mcp_request_context"
 
 // Registry maps tool names to schemas and handlers.
 type Registry struct {
-	mu       sync.RWMutex
-	tools    []Tool
-	handlers map[string]HandlerFunc
-	approve  func(context.Context, Tool, map[string]interface{}) error
-	readOnly map[string]bool
+	mu                   sync.RWMutex
+	tools                []Tool
+	handlers             map[string]HandlerFunc
+	approve              func(context.Context, Tool, map[string]interface{}) error
+	readOnly             map[string]bool
+	sensitiveRead        map[string]bool
+	approveSensitiveRead func(context.Context, Tool, map[string]interface{}) error
 }
 
 // NewRegistry returns an empty registry.
@@ -49,16 +51,27 @@ func DefaultRegistry() *Registry {
 }
 
 // Register adds a tool schema and handler. New or replaced tools require approval by default.
-func (r *Registry) Register(tool Tool, fn HandlerFunc) { r.register(tool, fn, false) }
+func (r *Registry) Register(tool Tool, fn HandlerFunc) { r.register(tool, fn, false, false) }
 
 // RegisterReadOnly adds an inspection tool which does not intentionally change system state.
-func (r *Registry) RegisterReadOnly(tool Tool, fn HandlerFunc) { r.register(tool, fn, true) }
+func (r *Registry) RegisterReadOnly(tool Tool, fn HandlerFunc) { r.register(tool, fn, true, false) }
 
-func (r *Registry) register(tool Tool, fn HandlerFunc, readOnly bool) {
+// RegisterSensitiveReadOnly adds an inspection tool whose results can contain
+// private local data. Clients should require consent before returning results
+// to a remote model or caller.
+func (r *Registry) RegisterSensitiveReadOnly(tool Tool, fn HandlerFunc) {
+	r.register(tool, fn, true, true)
+}
+
+func (r *Registry) register(tool Tool, fn HandlerFunc, readOnly, sensitiveRead bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.sensitiveRead == nil {
+		r.sensitiveRead = make(map[string]bool)
+	}
 	r.handlers[tool.Name] = fn
 	r.readOnly[tool.Name] = readOnly
+	r.sensitiveRead[tool.Name] = sensitiveRead
 	for i := range r.tools {
 		if r.tools[i].Name == tool.Name {
 			r.tools[i] = tool
@@ -66,6 +79,14 @@ func (r *Registry) register(tool Tool, fn HandlerFunc, readOnly bool) {
 		}
 	}
 	r.tools = append(r.tools, tool)
+}
+
+// SetSensitiveReadApprovalHandler installs the consent boundary for sensitive
+// read-only tools. Without a handler, those tools fail closed.
+func (r *Registry) SetSensitiveReadApprovalHandler(fn func(context.Context, Tool, map[string]interface{}) error) {
+	r.mu.Lock()
+	r.approveSensitiveRead = fn
+	r.mu.Unlock()
 }
 
 // SetApprovalHandler installs a human approval boundary for tools not classified as read-only.
@@ -118,6 +139,8 @@ func (r *Registry) DispatchContext(ctx context.Context, name string, args map[st
 	}
 	approve := r.approve
 	readOnly := r.readOnly[name]
+	sensitiveRead := r.sensitiveRead[name]
+	approveSensitiveRead := r.approveSensitiveRead
 	r.mu.RUnlock()
 	if !ok {
 		return fmt.Sprintf("unknown tool: %s", name), true
@@ -127,6 +150,17 @@ func (r *Registry) DispatchContext(ctx context.Context, name string, args map[st
 	}
 	if err := ctx.Err(); err != nil {
 		return "tool cancelled before execution", true
+	}
+	if sensitiveRead {
+		if approveSensitiveRead == nil {
+			return fmt.Sprintf("tool %q returns sensitive local data and requires explicit disclosure approval", name), true
+		}
+		if err := approveSensitiveRead(ctx, tool, args); err != nil {
+			return err.Error(), true
+		}
+		if err := ctx.Err(); err != nil {
+			return "tool cancelled before execution", true
+		}
 	}
 	toolArgs := make(map[string]interface{}, len(args)+1)
 	for key, value := range args {
