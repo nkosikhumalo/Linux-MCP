@@ -8,6 +8,7 @@
   const workStatus = document.getElementById("work-status");
   const themeBtn = document.getElementById("theme-btn");
   const themeLabel = document.getElementById("theme-label");
+  const privacyMode = document.getElementById("privacy-mode");
   const newChatBtn = document.getElementById("new-chat");
   const historyToggle = document.getElementById("history-toggle");
   const historyClose = document.getElementById("history-close");
@@ -625,6 +626,27 @@
     }
   }
 
+  async function initializePrivacyMode() {
+    try {
+      const mode = await appCall("PrivacyMode");
+      const details = {
+        local: ["LOCAL", "Prompts and tool results are sent only to your configured loopback model."],
+        cloud: ["CLOUD", "Prompts and tool results are sent to OpenRouter. Sensitive file, journal, and scan checks ask before sharing results."],
+        unavailable: ["OFFLINE", "No model is configured. Chat requests cannot be sent until model settings are configured."],
+      };
+      const [label, explanation] = details[mode] || details.unavailable;
+      privacyMode.textContent = label;
+      privacyMode.dataset.mode = details[mode] ? mode : "unavailable";
+      privacyMode.title = explanation;
+      privacyMode.setAttribute("aria-label", explanation);
+    } catch (_) {
+      privacyMode.textContent = "UNKNOWN";
+      privacyMode.dataset.mode = "unavailable";
+      privacyMode.title = "Could not read model privacy mode.";
+      privacyMode.setAttribute("aria-label", privacyMode.title);
+    }
+  }
+
   async function cancelChat() {
     stopBtn.dataset.stopping = "1";
     stopBtn.textContent = "Stopping…";
@@ -667,6 +689,7 @@
     }
   }
 
+  initializePrivacyMode();
   initializeHistory();
 
   input.focus();
