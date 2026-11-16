@@ -50,6 +50,10 @@ export function PrivacyMode() {
   return window['go']['main']['App']['PrivacyMode']();
 }
 
+export function SystemSnapshot() {
+  return window['go']['main']['App']['SystemSnapshot']();
+}
+
 export function RevealPath(arg1) {
   return window['go']['main']['App']['RevealPath'](arg1);
 }
