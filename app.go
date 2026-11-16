@@ -42,6 +42,12 @@ func NewApp() *App {
 	client, err := pipeline.NewClientFromEnv()
 	a := &App{tools: tools, store: store, storeErr: storeErr, pendingApprovals: make(map[string]chan bool)}
 	tools.SetApprovalHandler(a.requestToolApproval)
+	tools.SetSensitiveReadApprovalHandler(func(ctx context.Context, tool sys.Tool, args map[string]interface{}) error {
+		if client != nil && client.IsLocal() {
+			return nil
+		}
+		return a.requestSensitiveReadApproval(ctx, tool, args)
+	})
 	if err != nil {
 		a.err = err
 		return a
@@ -123,6 +129,16 @@ func (a *App) Chat(message string) (*pipeline.RunResult, error) {
 // requestToolApproval pauses a sensitive tool call until the desktop user approves it.
 // The standalone MCP server has no approval handler and therefore fails closed.
 func (a *App) requestToolApproval(ctx context.Context, tool sys.Tool, args map[string]interface{}) error {
+	return a.requestApproval(ctx, tool, args, false)
+}
+
+// requestSensitiveReadApproval asks before private local results are sent to a
+// cloud model. The tool runs only after approval, so denied data is not read.
+func (a *App) requestSensitiveReadApproval(ctx context.Context, tool sys.Tool, args map[string]interface{}) error {
+	return a.requestApproval(ctx, tool, args, true)
+}
+
+func (a *App) requestApproval(ctx context.Context, tool sys.Tool, args map[string]interface{}, disclosure bool) error {
 	if a.ctx == nil {
 		return fmt.Errorf("tool %q denied: desktop approval UI is unavailable", tool.Name)
 	}
@@ -133,7 +149,7 @@ func (a *App) requestToolApproval(ctx context.Context, tool sys.Tool, args map[s
 	a.pendingApprovals[id] = answer
 	a.approvalMu.Unlock()
 	defer func() { a.approvalMu.Lock(); delete(a.pendingApprovals, id); a.approvalMu.Unlock() }()
-	runtime.EventsEmit(a.ctx, "tool-approval-request", map[string]interface{}{"id": id, "name": tool.Name, "description": tool.Description, "arguments": args})
+	runtime.EventsEmit(a.ctx, "tool-approval-request", map[string]interface{}{"id": id, "name": tool.Name, "description": tool.Description, "arguments": args, "disclosure": disclosure})
 	select {
 	case approved := <-answer:
 		if !approved {
