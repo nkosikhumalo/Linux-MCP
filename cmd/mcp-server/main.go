@@ -26,6 +26,14 @@ func main() {
 			return nil
 		})
 	}
+	// Sensitive read results can contain filenames, log contents, or scan
+	// findings. A stdio caller has no consent UI, so keep these tools disabled
+	// unless its operator explicitly trusts the client receiving their output.
+	if os.Getenv("MCP_ALLOW_SENSITIVE_READS") == "true" {
+		reg.SetSensitiveReadApprovalHandler(func(context.Context, sys.Tool, map[string]interface{}) error {
+			return nil
+		})
+	}
 	s := server.NewMCPServer(
 		"Linux Helper",
 		"0.1.0",
