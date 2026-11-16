@@ -34,6 +34,7 @@ The app is written in **Go**. Its desktop window is built with **Wails**, and it
 | Local chat history | Start fresh, reopen, export, or delete conversations saved on this device |
 | Local or cloud models | Keep requests on a configured loopback model, or opt into OpenRouter's free-model router |
 | Desktop chat | A focused Wails interface with dark and light themes |
+| Local System Pulse | View OS, memory, disk, and top processes without contacting the model or saving a chat |
 | MCP server | Make the same system tools available to a compatible MCP client |
 
 ## What can it do?
