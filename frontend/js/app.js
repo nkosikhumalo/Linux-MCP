@@ -433,6 +433,7 @@
       const name = field(event, "name", "Name") || "unknown tool";
       const args = field(event, "arguments", "Arguments") || {};
       const description = field(event, "description", "Description") || "";
+      const disclosure = field(event, "disclosure", "Disclosure") === true;
       const detail = JSON.stringify(args, null, 2);
       if (name === "run_command") {
         const card = el("section", "command-approval");
@@ -471,7 +472,10 @@
         : name === "open_uri"
           ? "\n\nThis opens the requested file or URL using your desktop default handler."
           : "";
-      const approved = window.confirm(`The assistant requests ${name}.\n${description}${risk}\n\nArguments:\n${detail}\n\nApprove this one action?`);
+      const prompt = disclosure
+        ? `This local check may return private file paths, log entries, or scan findings. If you continue, its results will be sent to the configured cloud model provider.\n\nCheck: ${name}\n${description}\n\nArguments:\n${detail}\n\nAllow this check and share its results?`
+        : `The assistant requests ${name}.\n${description}${risk}\n\nArguments:\n${detail}\n\nApprove this one action?`;
+      const approved = window.confirm(prompt);
       appCall("ApproveToolCall", id, approved).catch((err) => {
         appendMessage("assistant", `Could not record approval: ${err.message || err}`, { error: true });
       });
